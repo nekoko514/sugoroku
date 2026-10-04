@@ -54,13 +54,16 @@ export function buildSystem(game) {
   ];
 }
 
-export function arrivalText({ square, index, total, time, event, personaName }) {
+export function arrivalText({ square, step, total, time, event, route, personaName }) {
   const lines = [
-    `${ARRIVE_TAG} ${square.emoji} ${square.name}（${index + 1}/${total}マス目・${time}）`,
+    `${ARRIVE_TAG} ${square.emoji} ${square.name}（${step + 1}/${total}マス目・${time}）`,
+  ];
+  if (route) lines.push(`道のり: 分かれ道で「${route}」を選んで、ここまで来ました。`);
+  lines.push(
     `情景: ${square.scene}`,
     `アイテム: ${square.items.join('、')}`,
     `イベント: ${event}`,
-  ];
+  );
   if (square.kind === 'start') lines.push('ここは夢の始まりです。気がつくと二人で遊園地のゲートの前にいた、というところから始めてください。');
   else if (square.kind === 'goal') lines.push('ここがゴールです。今日一日の思い出にふれながら、夢が終わりに近づいていることをそっと感じさせる、すてきな締めくくりにしてください。');
   else lines.push(`ここでの遊びを、${personaName}から始めてください。`);

@@ -66,32 +66,37 @@
   </main>
 
   <!-- すごろくボード -->
-  <main id="view-board" class="view" hidden>
+  <main id="view-board" class="view board-view" hidden>
     <div class="status">
       <span class="chip" id="status-persona"></span>
       <span class="chip" id="status-time"></span>
       <span class="chip" id="status-rolls"></span>
     </div>
 
-    <div class="board-stage">
-      <ol class="board" id="board" aria-label="すごろくのマス"></ol>
-    </div>
+    <div class="map-wrap" id="map"></div>
 
-    <div class="dice-area">
-      <div class="dice-scene" aria-hidden="true">
-        <div class="cube" id="dice"></div>
+    <p class="muted center small-print" id="usage-total"></p>
+
+    <!-- 画面の下に固定するサイコロと操作 -->
+    <div class="dock">
+      <div class="dock-main">
+        <div class="dice-scene" aria-hidden="true">
+          <div class="cube" id="dice"></div>
+        </div>
+        <div class="dock-text">
+          <p id="board-message"></p>
+          <p class="sr-only" id="dice-result" aria-live="polite"></p>
+        </div>
       </div>
-      <p class="sr-only" id="dice-result" aria-live="polite"></p>
-      <p class="muted center" id="board-message"></p>
-    </div>
-
-    <div class="board-actions">
+      <div class="branch-panel" id="branch-panel" hidden>
+        <p class="branch-title">🪧 分かれ道！どっちへ行く？</p>
+        <div class="branch-buttons" id="branch-buttons"></div>
+      </div>
       <button class="btn primary big" id="btn-roll" type="button">サイコロを振る</button>
       <div class="row">
-        <button class="btn" id="btn-open-chat" type="button">会話を開く</button>
-        <button class="btn" id="btn-export" type="button">書き出す</button>
+        <button class="btn small" id="btn-open-chat" type="button">💬 会話を開く</button>
+        <button class="btn small" id="btn-export" type="button">📖 書き出す</button>
       </div>
-      <p class="muted center small-print" id="usage-total"></p>
     </div>
   </main>
 

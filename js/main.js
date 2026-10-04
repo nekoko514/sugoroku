@@ -1,4 +1,5 @@
-import { PARK, SQUARES, timeOfDay } from './data/park.js';
+import { PARK, START, timeOfDay } from './data/park.js';
+import { NODES, TOTAL_STEPS, nextChoices, stepOf, renderMap, scrollToNode } from './map.js';
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
 import {
@@ -7,12 +8,10 @@ import {
 import { toMarkdown, toJson, parseSave, fileBaseName, saveFile } from './exporter.js';
 
 const $ = (id) => document.getElementById(id);
-const TOTAL = SQUARES.length;
-const BOARD_COLS = 4;
 
 let settings = store.loadSettings();
 let personas = store.loadPersonas();
-let game = store.loadGame();
+let game = null; // 読み込みは一番下の「はじまり」で（移行用の定数を使うため）
 let busy = false;
 let editingPersonaId = null;
 
@@ -59,7 +58,17 @@ function addUsage(u) {
 }
 
 function currentSquare() {
-  return SQUARES[game.position];
+  return NODES[game.position];
+}
+
+// 地図が一本道だったころのセーブデータ（位置が番号）を、今の形に直す
+const OLD_ORDER = ['gate', 'fountain', 'merry', 'cups', 'churros', 'shooting', 'coaster', 'photo', 'haunted', 'mirror', 'bench', 'parade', 'splash', 'shop', 'wheel', 'fireworks'];
+function migrateGame(g) {
+  if (!g) return g;
+  if (typeof g.position === 'number') g.position = OLD_ORDER[g.position] || START;
+  if (!NODES[g.position]) g.position = START;
+  if (!Array.isArray(g.trail)) g.trail = [g.position];
+  return g;
 }
 
 function lastArrive() {
@@ -286,7 +295,8 @@ function startGame(persona) {
     // 途中でペルソナを編集しても会話が崩れない（キャッシュも保たれる）ように、開始時の内容を写しておく
     persona: { id: persona.id, name: persona.name, emoji: persona.emoji, systemPrompt: persona.systemPrompt, knowledge: persona.knowledge },
     userName: settings.userName,
-    position: 0,
+    position: START,
+    trail: [START], // 通ったマス（地図に足あとを描く）
     rolls: 0,
     log: [],
     summary: '',
@@ -295,52 +305,84 @@ function startGame(persona) {
     memory: '',
     stats: { calls: 0, input: 0, cached: 0, output: 0 },
   };
-  arrive(0);
+  arrive(START);
   show('board');
   openChat();
   askPersona();
 }
 
-function arrive(index) {
-  const square = SQUARES[index];
+function arrive(id, route) {
+  const square = NODES[id];
   const event = square.events[Math.floor(Math.random() * square.events.length)];
-  const time = timeOfDay(index, TOTAL);
-  game.log.push({ t: 'arrive', square: square.id, index, time, event, text: arrivalText({ square, index, total: TOTAL, time, event, personaName: game.persona.name }) });
+  const step = stepOf(id);
+  const time = timeOfDay(step, TOTAL_STEPS);
+  const text = arrivalText({ square, step, total: TOTAL_STEPS, time, event, route, personaName: game.persona.name });
+  game.log.push({ t: 'arrive', square: id, step, time, event, route, text });
   if (square.kind === 'goal') game.finished = true;
   persist();
 }
 
 // ---------- ボード ----------
 
-function renderBoard() {
+let pendingChoice = null; // 分かれ道で選んでいる途中なら { choices, resolve }
+
+function renderBoard(scroll = true) {
   if (!game) return;
-  const board = $('board');
-  board.replaceChildren();
-  SQUARES.forEach((sq, i) => {
-    const li = el('li', { class: `sq sq-${sq.kind}${i === game.position ? ' here' : ''}${i < game.position ? ' past' : ''}` },
-      el('span', { class: 'sq-emoji', text: sq.emoji }),
-      el('span', { class: 'sq-name', text: sq.name }));
-    if (i === game.position) li.append(el('span', { class: 'piece', text: game.persona.emoji || '🙂', 'aria-label': '現在地' }));
-    // 4列で行ごとに向きを変える（すごろくらしいジグザグの道）
-    const row = Math.floor(i / BOARD_COLS);
-    const col = i % BOARD_COLS;
-    li.style.gridRow = String(row + 1);
-    li.style.gridColumn = String((row % 2 === 0 ? col : BOARD_COLS - 1 - col) + 1);
-    board.append(li);
-  });
+  const here = currentSquare();
+  renderMap($('map'), {
+    position: game.position,
+    trail: game.trail,
+    piece: game.persona.emoji || '🙂',
+    choices: pendingChoice ? pendingChoice.choices.map((c) => c.to) : [],
+  }, onMapTap);
   $('status-persona').textContent = `${game.persona.emoji || ''} ${game.persona.name}`;
-  $('status-time').textContent = `🕒 ${timeOfDay(game.position, TOTAL)}`;
+  $('status-time').textContent = `🕒 ${timeOfDay(stepOf(game.position), TOTAL_STEPS)}`;
   $('status-rolls').textContent = `🎲 ${game.rolls}回`;
+  $('btn-roll').hidden = !!pendingChoice;
   $('btn-roll').disabled = busy || game.finished;
   $('btn-roll').textContent = game.finished ? 'ゴール！おつかれさま' : 'サイコロを振る';
-  $('board-message').textContent = game.finished
-    ? '会話を開くと、日記を書いてもらったり、思い出を書き出したりできるよ。'
-    : `いまは ${currentSquare().emoji} ${currentSquare().name}`;
+  if (!busy) {
+    $('board-message').textContent = game.finished
+      ? '会話を開くと、夢日記を書いてもらったり、思い出を書き出したりできるよ。'
+      : `いまは ${here.emoji} ${here.name}`;
+  }
   const s = game.stats;
   $('usage-total').textContent = s?.calls
     ? `ここまで ${s.calls}回の送信・${fmtUsage(s)}`
     : '';
-  requestAnimationFrame(() => board.querySelector('.here')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  if (scroll) requestAnimationFrame(() => scrollToNode($('map'), game.position));
+}
+
+function onMapTap(id) {
+  if (pendingChoice) {
+    const c = pendingChoice.choices.find((x) => x.to === id);
+    if (c) { pendingChoice.resolve(c); return; }
+  }
+  const n = NODES[id];
+  toast(`${n.emoji} ${n.name}：${n.scene}`, 4000);
+}
+
+// 分かれ道でどっちへ行くか選んでもらう
+function chooseBranch(choices) {
+  return new Promise((resolve) => {
+    pendingChoice = {
+      choices,
+      resolve: (c) => {
+        pendingChoice = null;
+        $('branch-panel').hidden = true;
+        resolve(c);
+      },
+    };
+    $('branch-buttons').replaceChildren(...choices.map((c) => {
+      const to = NODES[c.to];
+      return el('button', { class: 'btn branch-btn', type: 'button', onclick: () => pendingChoice?.resolve(c) },
+        el('span', { class: 'branch-name', text: c.label }),
+        el('span', { class: 'branch-to', text: `${to.emoji} ${to.name}へ` }));
+    }));
+    $('branch-panel').hidden = false;
+    $('board-message').textContent = '分かれ道に着いたよ。地図の光っているマスをタップしても選べるよ。';
+    renderBoard(false);
+  });
 }
 
 // ---------- サイコロ（CSSの立方体） ----------
@@ -405,18 +447,28 @@ async function rollDice() {
     $('dice-result').textContent = `${value}が出た`;
 
     const from = game.position;
-    const to = Math.min(TOTAL - 1, from + value);
-    game.rolls += 1;
-    game.log.push({ t: 'roll', n: game.rolls, value, from, to });
-    // 1マスずつ進める
-    for (let p = from + 1; p <= to; p++) {
-      game.position = p;
+    let route = null;
+    $('board-message').textContent = `${value}が出た！`;
+    // 1マスずつ進める。分かれ道では止まって、どっちへ行くか選んでもらう
+    for (let left = value; left > 0; left--) {
+      const choices = nextChoices(game.position);
+      if (!choices.length) break; // ゴール
+      let next = choices[0];
+      if (choices.length > 1) {
+        next = await chooseBranch(choices);
+        route = next.label;
+        $('board-message').textContent = `「${next.label}」へ！ あと${left}マス`;
+      }
+      game.position = next.to;
+      game.trail.push(next.to);
       renderBoard();
-      await wait(220);
+      await wait(320);
     }
-    const sq = SQUARES[to];
+    const sq = currentSquare();
+    game.rolls += 1;
+    game.log.push({ t: 'roll', n: game.rolls, value, from, to: game.position, route });
     $('board-message').textContent = `${value}が出た！ ${sq.emoji} ${sq.name}に止まったよ`;
-    arrive(to);
+    arrive(game.position, route);
     await wait(700);
   } finally {
     busy = false;
@@ -461,10 +513,10 @@ function bubble(role, text, usage) {
 }
 
 function placeCard(e) {
-  const sq = SQUARES.find((s) => s.id === e.square);
+  const sq = NODES[e.square];
   return el('div', { class: `place-card kind-${sq.kind}` },
     el('div', { class: 'place-name', text: `${sq.emoji} ${sq.name}` }),
-    el('div', { class: 'muted small-print', text: `${e.index + 1}マス目・${e.time}` }),
+    el('div', { class: 'muted small-print', text: `${(e.step ?? e.index) + 1}マス目・${e.time}` }),
     el('p', { text: sq.scene }),
     el('p', { class: 'place-event', text: `✨ ${e.event}` }),
     el('p', { class: 'muted small-print', text: `アイテム: ${sq.items.join('、')}` }));
@@ -474,7 +526,7 @@ function renderChat() {
   const log = $('chat-log');
   log.replaceChildren();
   for (const e of game.log) {
-    if (e.t === 'roll') log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た` }));
+    if (e.t === 'roll') log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た${e.route ? `（🪧 ${e.route}へ）` : ''}` }));
     else if (e.t === 'arrive') log.append(placeCard(e));
     else if (e.t === 'msg') log.append(bubble(e.role, e.text, e.usage));
     else if (e.t === 'compress') log.append(el('div', { class: 'roll-note', text: '🧠 ここまでの思い出を整理したよ' }));
@@ -485,7 +537,7 @@ function renderChat() {
       el('p', { text: game.memory })));
   }
   const arrive = lastArrive();
-  const sq = SQUARES.find((s) => s.id === arrive?.square) || currentSquare();
+  const sq = NODES[arrive?.square] || currentSquare();
   $('chat-place').textContent = `${sq.emoji} ${sq.name}`;
   $('chat-sub').textContent = `${game.persona.emoji || ''} ${game.persona.name}と一緒`;
   $('chat-goal').hidden = !game.finished;
@@ -634,7 +686,7 @@ $('input-import').addEventListener('change', async (e) => {
   try {
     const loaded = parseSave(await f.text());
     if (game && !confirm('いま遊んでいる一日と入れ替わるよ。読み込む？')) return;
-    game = loaded;
+    game = migrateGame(loaded);
     persist();
     toast('読み込んだよ。');
     show('board');
@@ -651,6 +703,7 @@ $('btn-roll').addEventListener('click', rollDice);
 $('btn-open-chat').addEventListener('click', openChat);
 $('btn-home').addEventListener('click', () => { closeChat(); show('home'); });
 
+game = migrateGame(store.loadGame());
 buildDice();
 $('park-name').textContent = PARK.name;
 $('park-tagline').textContent = PARK.tagline;

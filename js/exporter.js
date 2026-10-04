@@ -38,12 +38,16 @@ export function toMarkdown(game) {
       out.push('');
       if (pendingRoll) {
         out.push(`## 🎲 ${pendingRoll.n}投目：${pendingRoll.value}が出た → ${sq.emoji} ${sq.name}に止まった`);
+        if (pendingRoll.route) {
+          out.push('');
+          out.push(`🪧 分かれ道で「${pendingRoll.route}」を選んだ`);
+        }
         pendingRoll = null;
       } else {
         out.push(`## ${sq.emoji} ${sq.name}からスタート`);
       }
       out.push('');
-      out.push(`*${e.index + 1}マス目・${e.time}*`);
+      out.push(`*${(e.step ?? e.index) + 1}マス目・${e.time}*`);
       out.push('');
       out.push(quote(`${sq.scene}\nイベント: ${e.event}`));
       out.push('');

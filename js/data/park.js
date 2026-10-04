@@ -7,9 +7,9 @@ export const PARK = {
   tagline: 'ペルソナと一緒に見る、遊園地の夢',
 };
 
-// 進んだマスの位置で、園内の時間帯が変わる
-export function timeOfDay(index, total) {
-  const r = index / (total - 1);
+// スタートから何マス進んだかで、園内の時間帯が変わる
+export function timeOfDay(step, total) {
+  const r = step / (total - 1);
   if (r < 0.25) return '朝';
   if (r < 0.55) return '昼';
   if (r < 0.8) return '夕暮れ';
@@ -17,6 +17,7 @@ export function timeOfDay(index, total) {
 }
 
 // kind: start / facility / rest / goal
+// 並び順に意味はない。道のつながりは下の ROUTE で決める。
 export const SQUARES = [
   {
     id: 'gate',
@@ -214,6 +215,45 @@ export const SQUARES = [
     ],
   },
   {
+    id: 'balloon',
+    kind: 'facility',
+    emoji: '🎈',
+    name: '風船屋さん',
+    scene: 'カラフルな風船がたくさん浮かんでいる屋台。すぐ先で道が二つに分かれていて、かわいい看板が立っている。',
+    items: ['好きな色の風船', '分かれ道の看板', 'リボン'],
+    events: [
+      '風船を一つずつ選ぶことになる。相手が何色を選ぶか当てっこできそう。',
+      '一つの風船がふわりと手を離れて、空へ飛んでいってしまう。',
+      '看板には「きらきらの道」と「ドキドキの道」と書いてある。',
+    ],
+  },
+  {
+    id: 'clock',
+    kind: 'facility',
+    emoji: '🕰️',
+    name: '星の時計台',
+    scene: '園の真ん中にそびえる時計台。文字盤には数字の代わりに星座が描かれていて、針がゆっくり回っている。',
+    items: ['星座の文字盤', 'からくり人形', '鐘'],
+    events: [
+      '時計台のからくりが動き出し、人形たちが踊り始める。',
+      '鐘が鳴ると、昼間なのに空に一瞬だけ星が見える。',
+      '時計の針が、少しだけ逆向きに回っているように見える。',
+    ],
+  },
+  {
+    id: 'portrait',
+    kind: 'facility',
+    emoji: '🎨',
+    name: '似顔絵屋さん',
+    scene: 'パラソルの下で、ベレー帽の絵描きさんが似顔絵を描いてくれる。イーゼルには、これまでのお客さんの絵が飾られている。',
+    items: ['スケッチブック', '色鉛筆', '小さな額縁'],
+    events: [
+      '絵描きさんが「お二人一緒に描きましょう」と言ってくれる。',
+      '絵描きさんが「お互いを描いてみては？」と色鉛筆を渡してくれる。',
+      '完成した絵の背景に、なぜか今日行った場所が描き込まれている。',
+    ],
+  },
+  {
     id: 'fireworks',
     kind: 'goal',
     emoji: '🎆',
@@ -226,4 +266,65 @@ export const SQUARES = [
       '花火が終わり、ゲートへ向かう帰り道。',
     ],
   },
+];
+
+// ---- 地図（すごろくの道） ----
+// 下の入場ゲートから、上の夜空の花火へ向かって進む。
+// x, y は地図上の位置（幅360の座標）。next は次のマス、branches は分かれ道。
+export const MAP_SIZE = { w: 360, h: 1300 };
+export const START = 'gate';
+
+export const ROUTE = {
+  gate: { x: 180, y: 1235, next: 'fountain' },
+  fountain: { x: 180, y: 1135, next: 'balloon' },
+  balloon: {
+    x: 180, y: 1035,
+    branches: [
+      { to: 'merry', label: 'きらきらの道' },
+      { to: 'shooting', label: 'ドキドキの道' },
+    ],
+  },
+  merry: { x: 78, y: 945, next: 'cups' },
+  cups: { x: 58, y: 845, next: 'photo' },
+  photo: { x: 98, y: 752, next: 'churros' },
+  shooting: { x: 282, y: 945, next: 'coaster' },
+  coaster: { x: 302, y: 845, next: 'haunted' },
+  haunted: { x: 262, y: 752, next: 'churros' },
+  churros: { x: 180, y: 678, next: 'clock' },
+  clock: { x: 268, y: 598, next: 'bench' },
+  bench: {
+    x: 172, y: 520,
+    branches: [
+      { to: 'parade', label: 'にぎやかな道' },
+      { to: 'mirror', label: 'ふしぎな道' },
+    ],
+  },
+  parade: { x: 74, y: 440, next: 'portrait' },
+  portrait: { x: 92, y: 345, next: 'shop' },
+  mirror: { x: 286, y: 440, next: 'splash' },
+  splash: { x: 270, y: 345, next: 'shop' },
+  shop: { x: 180, y: 268, next: 'wheel' },
+  wheel: { x: 94, y: 178, next: 'fireworks' },
+  fireworks: { x: 214, y: 88 },
+};
+
+// 地図の飾り（絵文字）。s は大きさ
+export const DECOR = [
+  { e: '🌙', x: 318, y: 52, s: 36 },
+  { e: '✨', x: 60, y: 70, s: 20 },
+  { e: '⭐', x: 130, y: 110, s: 16 },
+  { e: '✨', x: 320, y: 150, s: 18 },
+  { e: '🏰', x: 300, y: 250, s: 44 },
+  { e: '⭐', x: 30, y: 250, s: 14 },
+  { e: '🎪', x: 30, y: 545, s: 34 },
+  { e: '🌳', x: 330, y: 700, s: 30 },
+  { e: '🌳', x: 30, y: 650, s: 26 },
+  { e: '🌷', x: 180, y: 395, s: 20 },
+  { e: '🌸', x: 180, y: 820, s: 22 },
+  { e: '🌳', x: 22, y: 1000, s: 28 },
+  { e: '🌳', x: 340, y: 1060, s: 30 },
+  { e: '🌼', x: 90, y: 1180, s: 20 },
+  { e: '🌼', x: 280, y: 1200, s: 18 },
+  { e: '🌳', x: 40, y: 1260, s: 26 },
+  { e: '🌳', x: 320, y: 1270, s: 28 },
 ];

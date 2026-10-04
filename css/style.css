@@ -167,6 +167,10 @@ a { color: var(--accent-deep); }
   position: sticky;
   top: 0;
   z-index: 5;
+  background: color-mix(in srgb, var(--bg-top) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 0 0 24px 24px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -306,100 +310,176 @@ span.icon-btn { background: transparent; box-shadow: none; }
   box-shadow: inset 0 2px 0 var(--glow), 0 3px 0 var(--line), 0 6px 10px var(--shade);
 }
 
-/* ボードを少し奥に倒して、遊園地を見下ろしている感じにする */
-.board-stage {
-  perspective: 1000px;
-  perspective-origin: 50% 0%;
-  padding: 6px 0 18px;
+/* ---- 地図 ---- */
+:root {
+  --map-night: #3d3478;
+  --map-dusk: #f6b6d6;
+  --map-day: #ffe7c7;
+  --map-grass: #bfeccf;
+  --hill: rgba(255, 255, 255, 0.35);
+  --road: #fff6e8;
+  --road-side: #e8c9a8;
+  --road-dash: #f3d7b4;
+  --walked: #ffc2dc;
+  --walked-side: #e88fb5;
+  --sign: #fffaf2;
+  --sign-text: #8a5a3c;
 }
-.board {
-  list-style: none;
-  margin: 0;
-  padding: 14px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px 10px;
-  background: var(--board);
-  border-radius: 28px;
-  transform: rotateX(18deg);
-  transform-origin: 50% 100%;
-  transform-style: preserve-3d;
-  box-shadow: inset 0 4px 0 var(--glow), 0 14px 0 var(--board-deep), 0 30px 40px var(--shade);
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --map-night: #0f0b2a;
+    --map-dusk: #3b2463;
+    --map-day: #4b2e66;
+    --map-grass: #24405a;
+    --hill: rgba(255, 255, 255, 0.06);
+    --road: #6a5b97;
+    --road-side: #3e3468;
+    --road-dash: #8a7bb8;
+    --walked: #b0679a;
+    --walked-side: #7b3f6c;
+    --sign: #3a305f;
+    --sign-text: #ffd9ec;
+  }
+}
+:root[data-theme="dark"] {
+  --map-night: #0f0b2a;
+  --map-dusk: #3b2463;
+  --map-day: #4b2e66;
+  --map-grass: #24405a;
+  --hill: rgba(255, 255, 255, 0.06);
+  --road: #6a5b97;
+  --road-side: #3e3468;
+  --road-dash: #8a7bb8;
+  --walked: #b0679a;
+  --walked-side: #7b3f6c;
+  --sign: #3a305f;
+  --sign-text: #ffd9ec;
 }
 
-.sq {
-  --face: var(--tile-1);
-  --side: var(--tile-1-deep);
-  position: relative;
-  aspect-ratio: 1;
-  background: var(--face);
-  border-radius: 18px;
+.board-view { padding-bottom: 260px; } /* 下に固定した操作パネルのぶん */
+
+.map-wrap {
+  border-radius: 28px;
+  box-shadow: inset 0 0 0 4px var(--glow), 0 12px 0 var(--board-deep), 0 24px 36px var(--shade);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.map { display: block; width: 100%; height: auto; }
+.stop-night { stop-color: var(--map-night); }
+.stop-dusk { stop-color: var(--map-dusk); }
+.stop-day { stop-color: var(--map-day); }
+.stop-grass { stop-color: var(--map-grass); }
+.hills ellipse { fill: var(--hill); }
+.decor text { filter: drop-shadow(0 3px 2px var(--shade)); }
+
+.road, .road-side, .road-dash { fill: none; stroke-linecap: round; }
+.road-side { stroke: var(--road-side); stroke-width: 30; transform: translateY(5px); }
+.road { stroke: var(--road); stroke-width: 24; }
+.road-dash { stroke: var(--road-dash); stroke-width: 3; stroke-dasharray: 2 10; }
+.road-side.walked { stroke: var(--walked-side); }
+.road.walked { stroke: var(--walked); }
+.road-dash.walked { stroke: #ffffff; opacity: 0.8; }
+
+.sign rect { fill: var(--sign); stroke: var(--road-side); stroke-width: 2; filter: drop-shadow(0 3px 2px var(--shade)); }
+.sign text { font-size: 11px; font-weight: 800; fill: var(--sign-text); }
+
+.node { cursor: pointer; outline: none; }
+.node-ring { fill: none; stroke: transparent; stroke-width: 4; }
+.node-side { fill: var(--tile-1-deep); }
+.node-face { fill: var(--tile-1); stroke: var(--glow); stroke-width: 2; }
+.node-shine { fill: var(--glow); opacity: 0.8; }
+.node:nth-of-type(4n + 2) .node-face { fill: var(--tile-2); }
+.node:nth-of-type(4n + 2) .node-side { fill: var(--tile-2-deep); }
+.node:nth-of-type(4n + 3) .node-face { fill: var(--tile-3); }
+.node:nth-of-type(4n + 3) .node-side { fill: var(--tile-3-deep); }
+.node:nth-of-type(4n + 4) .node-face { fill: var(--tile-4); }
+.node:nth-of-type(4n + 4) .node-side { fill: var(--tile-4-deep); }
+.node.kind-start .node-face, .node.kind-goal .node-face { fill: var(--gold); }
+.node.kind-start .node-side, .node.kind-goal .node-side { fill: var(--gold-deep); }
+.node-label {
+  font-size: 11px;
+  font-weight: 800;
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.node.past .node-face, .node.past .node-side { opacity: 0.75; }
+.node.here .node-ring { stroke: var(--accent); }
+.node.choice .node-ring { stroke: var(--accent); stroke-dasharray: 6 6; animation: ring-spin 1.2s linear infinite, ring-pulse 1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes ring-spin { to { stroke-dashoffset: -24; } }
+@keyframes ring-pulse { 50% { stroke-width: 7; } }
+.node:focus-visible .node-ring { stroke: var(--accent-deep); }
+
+.piece-shadow { fill: var(--shade); }
+.piece-side { fill: var(--line); }
+.piece-face { fill: var(--surface); stroke: var(--accent); stroke-width: 3; }
+.piece-bob { animation: bob 1.6s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+
+/* ---- 下に固定する操作パネル ---- */
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 16px calc(env(safe-area-inset-bottom) + 10px);
+  background: var(--surface);
+  border-radius: 28px 28px 0 0;
+  box-shadow: inset 0 4px 0 var(--glow), 0 -10px 30px var(--shade);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  text-align: center;
-  box-shadow: inset 0 3px 0 var(--glow), 0 7px 0 var(--side), 0 12px 12px var(--shade);
-  transition: transform 0.25s, box-shadow 0.25s, opacity 0.25s;
-  transform-style: preserve-3d;
+  gap: 8px;
 }
-.sq:nth-child(4n + 2) { --face: var(--tile-2); --side: var(--tile-2-deep); }
-.sq:nth-child(4n + 3) { --face: var(--tile-3); --side: var(--tile-3-deep); }
-.sq:nth-child(4n + 4) { --face: var(--tile-4); --side: var(--tile-4-deep); }
-.sq-start, .sq-goal { --face: var(--gold) !important; --side: var(--gold-deep) !important; }
-.sq-emoji { font-size: 1.7rem; line-height: 1.1; filter: drop-shadow(0 2px 1px var(--shade)); }
-.sq-name { font-size: 0.6rem; line-height: 1.25; font-weight: 700; color: var(--text); opacity: 0.8; overflow-wrap: anywhere; }
-.sq.past { opacity: 0.6; transform: translateY(4px); box-shadow: inset 0 3px 0 var(--glow), 0 3px 0 var(--side), 0 5px 6px var(--shade); }
-.sq.here {
-  transform: translateY(-8px) scale(1.06);
-  z-index: 2;
-  opacity: 1;
-  box-shadow: inset 0 3px 0 var(--glow), 0 0 0 3px var(--accent), 0 10px 0 var(--side), 0 22px 20px var(--shade);
-}
+.dock-main { display: flex; align-items: center; gap: 14px; }
+.dock-text { flex: 1; }
+.dock-text p { margin: 0; font-weight: 700; font-size: 0.95rem; }
+.dock .row .btn { margin-bottom: 4px; }
 
-/* コマは倒したボードの上に立たせる（マスの絵を隠さないように角に置く） */
-.piece {
-  position: absolute;
-  top: -16px;
-  right: -10px;
-  font-size: 1.3rem;
-  width: 40px; height: 40px;
+.branch-panel {
+  background: var(--accent-soft);
+  border-radius: 20px;
+  padding: 10px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface);
-  border-radius: 50%;
-  box-shadow: inset 0 -4px 0 var(--line), 0 0 0 3px var(--accent), 0 8px 10px var(--shade);
-  transform-origin: 50% 100%;
-  transform: rotateX(-18deg) translateZ(18px);
-  animation: hop 0.5s ease;
+  flex-direction: column;
+  gap: 8px;
 }
-@keyframes hop {
-  0% { translate: 0 -14px; }
-  60% { translate: 0 2px; }
-  100% { translate: 0 0; }
+.branch-panel p { margin: 0; }
+.branch-title { text-align: center; font-weight: 800; }
+.branch-buttons { display: flex; gap: 8px; }
+.branch-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-radius: 18px;
+  min-height: 64px;
 }
+.branch-name { font-size: 1rem; }
+.branch-to { font-size: 0.75rem; color: var(--muted); font-weight: 700; }
 
 /* ---- サイコロ（立方体） ---- */
-.dice-area { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.dice-area p { margin: 0; font-weight: 700; }
 .dice-scene {
-  width: 76px; height: 76px;
+  width: 58px; height: 58px;
   perspective: 500px;
-  margin: 6px 0 4px;
+  flex: 0 0 auto;
 }
 .dice-scene::after {
   content: "";
   display: block;
-  width: 70px; height: 14px;
-  margin: 10px auto 0;
+  width: 52px; height: 10px;
+  margin: 6px auto 0;
   background: var(--shade);
   border-radius: 50%;
   filter: blur(4px);
 }
 .cube {
-  --s: 76px;
+  --s: 58px;
   position: relative;
   width: var(--s); height: var(--s);
   transform-style: preserve-3d;
@@ -410,11 +490,11 @@ span.icon-btn { background: transparent; box-shadow: none; }
   position: absolute;
   inset: 0;
   background: var(--surface);
-  border-radius: 18px;
+  border-radius: 14px;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  padding: 12px;
+  padding: 9px;
   box-shadow: inset 0 0 0 2px var(--line), inset 0 -6px 10px var(--surface-2), inset 0 4px 6px var(--glow);
   backface-visibility: hidden;
 }
@@ -425,17 +505,15 @@ span.icon-btn { background: transparent; box-shadow: none; }
 .face.top    { transform: rotateX(90deg) translateZ(calc(var(--s) / 2)); }
 .face.bottom { transform: rotateX(-90deg) translateZ(calc(var(--s) / 2)); }
 .pip {
-  width: 12px; height: 12px;
+  width: 9px; height: 9px;
   margin: auto;
   border-radius: 50%;
   background: var(--text);
   box-shadow: inset 0 2px 2px rgba(0, 0, 0, 0.35);
 }
-.face.front .pip { background: var(--accent); width: 18px; height: 18px; }
+.face.front .pip { background: var(--accent); width: 14px; height: 14px; }
 .pip.off { visibility: hidden; }
 
-.board-actions { display: flex; flex-direction: column; gap: 10px; }
-.board-actions p { margin: 0; }
 
 /* ---- チャット ---- */
 .chat {
