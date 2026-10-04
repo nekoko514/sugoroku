@@ -12,10 +12,6 @@ function fmtDate(iso) {
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function quote(text) {
-  return text.split('\n').map((l) => `> ${l}`).join('\n');
-}
-
 export function toMarkdown(game) {
   const persona = game.persona;
   const me = game.userName?.trim() || 'あなた';
@@ -48,8 +44,6 @@ export function toMarkdown(game) {
       }
       out.push('');
       out.push(`*${(e.step ?? e.index) + 1}マス目・${e.time}*`);
-      out.push('');
-      out.push(quote(`${sq.scene}\nイベント: ${e.event}`));
       out.push('');
     } else if (e.t === 'msg') {
       const who = e.role === 'assistant' ? persona.name : me;

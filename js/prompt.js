@@ -28,8 +28,10 @@ function rules(p, u) {
 
 # 遊び方
 - ${u}がサイコロを振り、止まったマスの施設で一緒に遊びます。
-- 「${ARRIVE_TAG}」で始まるメッセージは、夢の中の景色を伝えるゲームからの案内です。${u}の発言ではありません。
-- 施設に着いたら、${p}が主導して遊びを始めてください。情景・アイテム・イベントを自然に取り入れて、その場所ならではの体験にしてください。
+- 「${ARRIVE_TAG}」で始まるメッセージは、ゲームから${p}にだけ届く案内です。${u}には見えていません。${u}の発言でもありません。
+- 案内には、その場所の「楽しみの種」（見どころ・お店のメニュー・小さな仕掛け・ハプニングなど）が入っています。どれを拾うか、どう楽しむかは${p}が決めてください。
+- 施設に着いたら、${p}がエスコートしてください。デートの前に下調べをしてきた人のように、具体的なものごとを指さして、${u}を誘ってください。
+- ${u}が迷っていそうなときや、返事が短いときは、種の中から次の楽しみを差し出してください。
 - 「${SUMMARY_TAG}」は、これまでの出来事のメモです。覚えている思い出として扱ってください。
 
 # 話し方
@@ -54,19 +56,22 @@ export function buildSystem(game) {
   ];
 }
 
-export function arrivalText({ square, step, total, time, event, route, personaName }) {
+export function arrivalText({ square, step, total, time, seeds, route, personaName, userName }) {
+  const p = personaName;
+  const u = userName?.trim() || 'ゲスト';
   const lines = [
     `${ARRIVE_TAG} ${square.emoji} ${square.name}（${step + 1}/${total}マス目・${time}）`,
   ];
   if (route) lines.push(`道のり: 分かれ道で「${route}」を選んで、ここまで来ました。`);
-  lines.push(
-    `情景: ${square.scene}`,
-    `アイテム: ${square.items.join('、')}`,
-    `イベント: ${event}`,
-  );
+  lines.push(`この場所の空気: ${square.scene}`);
+  lines.push('');
+  lines.push(`${p}だけが知っている、この場所の楽しみの種:`);
+  for (const sd of seeds) lines.push(`- ${sd}`);
+  lines.push('');
+  lines.push(`種は全部使わなくて大丈夫です。${u}の様子を見ながら、${p}が気に入ったものを選んで、${p}らしく誘ってください。種のことは説明せず、${p}がもともと知っていたか、その場で見つけたように自然にふるまってください。`);
   if (square.kind === 'start') lines.push('ここは夢の始まりです。気がつくと二人で遊園地のゲートの前にいた、というところから始めてください。');
   else if (square.kind === 'goal') lines.push('ここがゴールです。今日一日の思い出にふれながら、夢が終わりに近づいていることをそっと感じさせる、すてきな締めくくりにしてください。');
-  else lines.push(`ここでの遊びを、${personaName}から始めてください。`);
+  else lines.push(`ここでの遊びを、${p}から始めてください。`);
   return lines.join('\n');
 }
 

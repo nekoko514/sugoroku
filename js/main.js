@@ -1,4 +1,4 @@
-import { PARK, START, timeOfDay } from './data/park.js';
+import { PARK, START, timeOfDay, pickSeeds } from './data/park.js';
 import { NODES, TOTAL_STEPS, nextChoices, stepOf, renderMap, scrollToNode } from './map.js';
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
@@ -313,11 +313,11 @@ function startGame(persona) {
 
 function arrive(id, route) {
   const square = NODES[id];
-  const event = square.events[Math.floor(Math.random() * square.events.length)];
   const step = stepOf(id);
   const time = timeOfDay(step, TOTAL_STEPS);
-  const text = arrivalText({ square, step, total: TOTAL_STEPS, time, event, route, personaName: game.persona.name });
-  game.log.push({ t: 'arrive', square: id, step, time, event, route, text });
+  const seeds = pickSeeds(square, time);
+  const text = arrivalText({ square, step, total: TOTAL_STEPS, time, seeds, route, personaName: game.persona.name, userName: game.userName });
+  game.log.push({ t: 'arrive', square: id, step, time, seeds, route, text });
   if (square.kind === 'goal') game.finished = true;
   persist();
 }
@@ -359,7 +359,7 @@ function onMapTap(id) {
     if (c) { pendingChoice.resolve(c); return; }
   }
   const n = NODES[id];
-  toast(`${n.emoji} ${n.name}：${n.scene}`, 4000);
+  toast(`${n.emoji} ${n.name}：${n.hint}`, 3000);
 }
 
 // 分かれ道でどっちへ行くか選んでもらう
@@ -517,9 +517,8 @@ function placeCard(e) {
   return el('div', { class: `place-card kind-${sq.kind}` },
     el('div', { class: 'place-name', text: `${sq.emoji} ${sq.name}` }),
     el('div', { class: 'muted small-print', text: `${(e.step ?? e.index) + 1}マス目・${e.time}` }),
-    el('p', { text: sq.scene }),
-    el('p', { class: 'place-event', text: `✨ ${e.event}` }),
-    el('p', { class: 'muted small-print', text: `アイテム: ${sq.items.join('、')}` }));
+    // 景色やイベントはペルソナだけが知っている。ユーザーにはペルソナの言葉で伝わる
+    el('p', { class: 'muted small-print', text: sq.hint }));
 }
 
 function renderChat() {
