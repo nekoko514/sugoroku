@@ -12,7 +12,7 @@
 // 混ざらないようにして、本人がすんなり受け入れられるようにするため。
 
 import { PARK } from './data/park.js';
-import { showcaseFor, findItem } from './data/showcase.js';
+import { showcaseFor, findItem, unlockedBy } from './data/showcase.js';
 
 export const ARRIVE_TAG = '【マス到着】';
 const SUMMARY_TAG = '【これまでの思い出（要約）】';
@@ -33,12 +33,26 @@ export const TOOLS = [
   },
 ];
 
-// 道具が呼ばれたときの答え
-export function runTool(name, args) {
+// 道具が呼ばれたときの答え。
+// seen … このゲームですでに近くで見た品物（隠れた品物は、その手前の品物を見たあとでないと見られない）
+export function runTool(name, args, { seen = [], cast = true } = {}) {
   if (name !== 'look_closer') return `「${name}」という道具はありません。`;
   const it = findItem(args?.item);
-  if (!it) return 'その品物は見つかりませんでした。ショーケースの [ ] の中のIDを使ってください。';
-  return `【近くで見た】${it.name}\n${it.detail}`;
+  const notFound = 'その品物は見つかりませんでした。ショーケースの [ ] の中のIDを使ってください。';
+  if (!it || (it.cast && !cast)) return notFound;
+  if (it.hidden && !seen.includes(it.unlockBy)) return notFound;
+  let out = `【近くで見た】${it.name}\n${it.detail}`;
+  const deeper = unlockedBy(it.id, { cast });
+  if (deeper.length) {
+    out += '\n\n（奥へ進めるようになったもの。気になれば look_closer で近くで見られます）';
+    for (const d of deeper) out += `\n- [${d.id}] ${d.name}：${d.short}`;
+  }
+  return out;
+}
+
+// このゲームで、これまでに近くで見た品物
+export function seenItems(game) {
+  return game.log.flatMap((e) => e.looks || []);
 }
 
 function rules(p, u, cast) {
@@ -67,6 +81,8 @@ function rules(p, u, cast) {
 - 気になったものがあれば、look_closer の道具で近くで見てください。素材・産地・味・作り方・由来などの詳しいことが分かります。道具を使ったことは${u}には見えません。
 - 分かったことは、${p}が自分の目で見て、味わって、ふれて知ったこととして、${p}の言葉で${u}に伝えてください。説明書を読み上げるようにはせず、${u}がその場にいるように感じられる描写にしてください。
 - ${u}が何かに興味を持ったときや、「どれがおすすめ？」と聞かれたときにも使えます。1回の返事で見られるのは3つまでです。
+- 近くで見ると、その奥へ進めるようになることがあります。建物や品物の奥には、そこに生きた誰かの人生の話が眠っていることがあります。
+- 誰かの人生や、少し重い話にふれたときは、ただ説明するのではなく、${p}がそれを見てどう感じたかを、${p}らしい言葉で少し話してください。沈みすぎず、${u}の気持ちにも寄り添ってください。
 - 近くで見た結果に「${FOUND_TAG}」があれば、${p}がそれに気づいたということです。見つけたものは二人の持ち物になります。${u}にも見せて、一緒に驚いたり、大事にしまったりしてください。あとでどこかでつながるかもしれません。
 ${cast
     ? `- 遊園地のスタッフやほかのお客さんとも、自然にやり取りしてかまいません。ただし主役は${p}と${u}の二人です。\n- 「${AMBIENT_TAG}」で誰かが話しかけてきたときは、${p}が短く応じてかまいません。その人はすぐに離れていくので、引き止めたり、会話を長引かせたりせず、また二人の時間に戻ってください。`

@@ -5,7 +5,7 @@ import { SECRETS, trySecret, linksAt, linkText, secretById } from './data/secret
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
 import {
-  buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize, TOOLS, runTool, FOUND_TAG,
+  buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize, TOOLS, runTool, seenItems, FOUND_TAG,
 } from './prompt.js';
 import { toMarkdown, toJson, parseSave, fileBaseName, saveFile } from './exporter.js';
 
@@ -524,7 +524,7 @@ function aiArgs() {
     key: store.getKey(settings.provider),
     deepseekViaProxy: settings.deepseekViaProxy,
     tools: TOOLS, // 使わない呼び出しでも毎回同じものを渡す（キャッシュのため）
-    onTool: runTool,
+    onTool: (name, args) => runTool(name, args, { seen: seenItems(game), cast: game.cast !== false }),
   };
 }
 
@@ -631,7 +631,7 @@ async function askPersona() {
       system: buildSystem(game),
       messages: buildMessages(game, settings.provider),
       onTool: (name, args) => {
-        let out = runTool(name, args);
+        let out = runTool(name, args, { seen: [...seenItems(game), ...looks], cast: game.cast !== false });
         looks.push(String(args?.item || ''));
         // 近くで見た品物の奥に、隠しアイテムがあれば確率で見つかる
         const s = name === 'look_closer' && trySecret(String(args?.item || ''), { found: [...(game.found || []), ...finds] });
