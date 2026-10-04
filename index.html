@@ -20,6 +20,10 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
+  <div class="sky" aria-hidden="true">
+    <span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span>
+    <span class="star s1">✦</span><span class="star s2">✧</span><span class="star s3">✦</span><span class="star s4">✧</span><span class="star s5">✦</span>
+  </div>
   <header class="topbar">
     <button class="icon-btn" id="btn-home" type="button" aria-label="ホームへ" hidden>‹</button>
     <h1 class="title" id="park-name">ゆめいろパーク</h1>
@@ -69,10 +73,15 @@
       <span class="chip" id="status-rolls"></span>
     </div>
 
-    <ol class="board" id="board" aria-label="すごろくのマス"></ol>
+    <div class="board-stage">
+      <ol class="board" id="board" aria-label="すごろくのマス"></ol>
+    </div>
 
     <div class="dice-area">
-      <div class="dice" id="dice" aria-live="polite">🎲</div>
+      <div class="dice-scene" aria-hidden="true">
+        <div class="cube" id="dice"></div>
+      </div>
+      <p class="sr-only" id="dice-result" aria-live="polite"></p>
       <p class="muted center" id="board-message"></p>
     </div>
 
@@ -102,7 +111,7 @@
       <button class="btn small" id="btn-retry" type="button">もう一度</button>
     </div>
     <div class="chat-goal" id="chat-goal" hidden>
-      <button class="btn primary" id="btn-memory" type="button">📔 今日の日記を書いてもらう</button>
+      <button class="btn primary" id="btn-memory" type="button">📔 目が覚めたら、夢日記を書いてもらう</button>
       <button class="btn" id="btn-export-2" type="button">思い出を書き出す</button>
     </div>
     <form class="chat-input" id="chat-form">
@@ -207,6 +216,11 @@
   <dialog id="dlg-pick" class="sheet">
     <form method="dialog" class="sheet-body">
       <h2>だれと遊ぶ？</h2>
+      <label class="field">
+        <span>あなたの呼び名</span>
+        <input type="text" id="pick-username" maxlength="40" placeholder="ペルソナに呼んでほしい名前" autocomplete="nickname">
+        <small class="muted">ゲームのルールの中で、この名前とペルソナの名前を使って二人のことを書くよ。</small>
+      </label>
       <ul class="persona-list pick" id="pick-list"></ul>
       <p class="muted" id="pick-empty" hidden>まだペルソナがいないよ。ホームの「＋ 追加」から登録してね。</p>
       <div class="row end">

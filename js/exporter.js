@@ -20,7 +20,7 @@ export function toMarkdown(game) {
   const persona = game.persona;
   const me = game.userName?.trim() || 'あなた';
   const out = [];
-  out.push(`# ${PARK.name}の思い出`);
+  out.push(`# ${PARK.name}の夢の記録`);
   out.push('');
   out.push(`- 日付: ${fmtDate(game.startedAt)}`);
   out.push(`- 一緒に遊んだ子: ${persona.emoji || ''} ${persona.name}`);
@@ -57,7 +57,7 @@ export function toMarkdown(game) {
   if (game.memory) {
     out.push('---');
     out.push('');
-    out.push(`## 📔 ${persona.name}の日記`);
+    out.push(`## 📔 ${persona.name}の夢日記`);
     out.push('');
     out.push(game.memory);
     out.push('');

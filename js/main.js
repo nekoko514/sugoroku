@@ -249,6 +249,7 @@ $('btn-settings').addEventListener('click', openSettings);
 // ---------- ゲームの開始 ----------
 
 function openPicker() {
+  $('pick-username').value = settings.userName;
   const list = $('pick-list');
   list.replaceChildren();
   $('pick-empty').hidden = personas.length > 0;
@@ -256,7 +257,20 @@ function openPicker() {
     list.append(el('li', {},
       el('button', {
         class: 'persona-item', type: 'button',
-        onclick: () => { $('dlg-pick').close(); startGame(p); },
+        onclick: () => {
+          const name = $('pick-username').value.trim();
+          if (!name) {
+            toast('先に、あなたの呼び名を入れてね。');
+            $('pick-username').focus();
+            return;
+          }
+          if (name !== settings.userName) {
+            settings = { ...settings, userName: name };
+            store.saveSettings(settings);
+          }
+          $('dlg-pick').close();
+          startGame(p);
+        },
       },
       el('span', { class: 'p-emoji', text: p.emoji || '🙂' }),
       el('span', { class: 'p-name', text: p.name }))));
@@ -291,7 +305,7 @@ function arrive(index) {
   const square = SQUARES[index];
   const event = square.events[Math.floor(Math.random() * square.events.length)];
   const time = timeOfDay(index, TOTAL);
-  game.log.push({ t: 'arrive', square: square.id, index, time, event, text: arrivalText({ square, index, total: TOTAL, time, event }) });
+  game.log.push({ t: 'arrive', square: square.id, index, time, event, text: arrivalText({ square, index, total: TOTAL, time, event, personaName: game.persona.name }) });
   if (square.kind === 'goal') game.finished = true;
   persist();
 }
@@ -329,6 +343,45 @@ function renderBoard() {
   requestAnimationFrame(() => board.querySelector('.here')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
 }
 
+// ---------- サイコロ（CSSの立方体） ----------
+
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+// 面の置き場所と、その面を正面に向けるための回転
+const FACES = [
+  { value: 1, cls: 'front', show: [0, 0] },
+  { value: 6, cls: 'back', show: [0, 180] },
+  { value: 3, cls: 'right', show: [0, -90] },
+  { value: 4, cls: 'left', show: [0, 90] },
+  { value: 5, cls: 'top', show: [-90, 0] },
+  { value: 2, cls: 'bottom', show: [90, 0] },
+];
+let diceTurns = 0;
+
+function buildDice() {
+  const cube = $('dice');
+  cube.replaceChildren(...FACES.map((f) => {
+    const face = el('div', { class: `face ${f.cls}` });
+    for (let i = 0; i < 9; i++) face.append(el('span', { class: PIPS[f.value].includes(i) ? 'pip' : 'pip off' }));
+    return face;
+  }));
+  setDice(1, false);
+}
+
+function setDice(value, animate) {
+  const cube = $('dice');
+  const [rx, ry] = FACES.find((f) => f.value === value).show;
+  cube.classList.toggle('spinning', animate);
+  // 360度の倍数を足して、毎回ちゃんと転がって見えるようにする
+  const t = diceTurns * 720;
+  cube.style.transform = `rotateX(${t + rx}deg) rotateY(${t + ry}deg)`;
+}
+
+async function spinDice(value) {
+  diceTurns += 1;
+  setDice(value, true);
+  await wait(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 50 : 1200);
+}
+
 function wait(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -347,16 +400,9 @@ async function rollDice() {
         toast(`思い出の整理に失敗したよ（${e.message}）。このまま進むね。`, 5000);
       }
     }
-    const dice = $('dice');
-    const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    dice.classList.add('rolling');
-    for (let i = 0; i < 10; i++) {
-      dice.textContent = faces[Math.floor(Math.random() * 6)];
-      await wait(70 + i * 12);
-    }
     const value = 1 + Math.floor(Math.random() * 6);
-    dice.textContent = faces[value - 1];
-    dice.classList.remove('rolling');
+    await spinDice(value);
+    $('dice-result').textContent = `${value}が出た`;
 
     const from = game.position;
     const to = Math.min(TOTAL - 1, from + value);
@@ -435,7 +481,7 @@ function renderChat() {
   }
   if (game.memory) {
     log.append(el('div', { class: 'diary' },
-      el('div', { class: 'place-name', text: `📔 ${game.persona.name}の日記` }),
+      el('div', { class: 'place-name', text: `📔 ${game.persona.name}の夢日記` }),
       el('p', { text: game.memory })));
   }
   const arrive = lastArrive();
@@ -457,7 +503,7 @@ function updateChatControls() {
   $('btn-send').disabled = busy;
   $('btn-next').disabled = busy;
   $('btn-memory').disabled = busy;
-  $('btn-memory').textContent = game?.memory ? '📔 日記を書き直してもらう' : '📔 今日の日記を書いてもらう';
+  $('btn-memory').textContent = game?.memory ? '📔 夢日記を書き直してもらう' : '📔 目が覚めたら、夢日記を書いてもらう';
 }
 
 function showError(message) {
@@ -542,7 +588,7 @@ $('btn-memory').addEventListener('click', async () => {
   updateChatControls();
   $('chat-error').hidden = true;
   const live = el('div', { class: 'diary typing' },
-    el('div', { class: 'place-name', text: `📔 ${game.persona.name}の日記` }),
+    el('div', { class: 'place-name', text: `📔 ${game.persona.name}の夢日記` }),
     el('p', { text: '' }));
   $('chat-log').querySelector('.diary')?.remove();
   $('chat-log').append(live);
@@ -605,6 +651,7 @@ $('btn-roll').addEventListener('click', rollDice);
 $('btn-open-chat').addEventListener('click', openChat);
 $('btn-home').addEventListener('click', () => { closeChat(); show('home'); });
 
+buildDice();
 $('park-name').textContent = PARK.name;
 $('park-tagline').textContent = PARK.tagline;
 document.title = PARK.name;
