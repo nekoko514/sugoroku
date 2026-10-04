@@ -1,10 +1,11 @@
 import { PARK, START, timeOfDay, pickSeeds } from './data/park.js';
 import { NODES, TOTAL_STEPS, nextChoices, stepOf, renderMap, scrollToNode } from './map.js';
 import { pickAmbient } from './data/ambient.js';
+import { SECRETS, trySecret, linksAt, linkText, secretById } from './data/secrets.js';
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
 import {
-  buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize, TOOLS, runTool,
+  buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize, TOOLS, runTool, FOUND_TAG,
 } from './prompt.js';
 import { toMarkdown, toJson, parseSave, fileBaseName, saveFile } from './exporter.js';
 
@@ -69,6 +70,7 @@ function migrateGame(g) {
   if (typeof g.position === 'number') g.position = OLD_ORDER[g.position] || START;
   if (!NODES[g.position]) g.position = START;
   if (!Array.isArray(g.trail)) g.trail = [g.position];
+  if (!Array.isArray(g.found)) g.found = [];
   return g;
 }
 
@@ -112,6 +114,10 @@ function renderHome() {
         el('span', { class: 'p-name', text: p.name }),
         el('span', { class: 'muted', text: '編集' }))));
   }
+  // 夢の図鑑（これまでに見つけた隠しアイテム）
+  const got = new Set(store.loadCollection());
+  $('book-count').textContent = `${SECRETS.filter((s) => got.has(s.id)).length} / ${SECRETS.length}`;
+  $('book-list').replaceChildren(...SECRETS.map((s) => el('li', { class: got.has(s.id) ? 'got' : 'unknown', text: got.has(s.id) ? `✨ ${s.name}` : '？？？' })));
   const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   $('pwa-hint').hidden = !(isIos && !standalone);
@@ -302,6 +308,7 @@ function startGame(persona) {
     cast: settings.cast !== false,
     position: START,
     trail: [START], // 通ったマス（地図に足あとを描く）
+    found: [], // 見つけた隠しアイテム（二人の持ち物）
     rolls: 0,
     log: [],
     summary: '',
@@ -322,8 +329,14 @@ function arrive(id, route) {
   const time = timeOfDay(step, TOTAL_STEPS);
   const cast = game.cast !== false;
   const seeds = pickSeeds(square, time, { cast });
-  const text = arrivalText({ square, step, total: TOTAL_STEPS, time, seeds, route, cast, personaName: game.persona.name, userName: game.userName });
-  game.log.push({ t: 'arrive', square: id, step, time, seeds, route, text });
+  // 持ち物がきっかけで起こる出来事
+  const links = linksAt(id, game.found || []);
+  const text = arrivalText({
+    square, step, total: TOTAL_STEPS, time, seeds, route, cast,
+    personaName: game.persona.name, userName: game.userName,
+    links: links.map((l) => ({ name: l.name, text: linkText(l, cast) })),
+  });
+  game.log.push({ t: 'arrive', square: id, step, time, seeds, route, text, ...(links.length ? { links: links.map((l) => l.id) } : {}) });
   if (square.kind === 'goal') game.finished = true;
   persist();
 }
@@ -542,7 +555,14 @@ function placeCard(e) {
     el('div', { class: 'place-name', text: `${sq.emoji} ${sq.name}` }),
     el('div', { class: 'muted small-print', text: `${(e.step ?? e.index) + 1}マス目・${e.time}` }),
     // 景色やイベントはペルソナだけが知っている。ユーザーにはペルソナの言葉で伝わる
-    el('p', { class: 'muted small-print', text: sq.hint }));
+    el('p', { class: 'muted small-print', text: sq.hint }),
+    ...(e.links || []).map((id) => el('p', { class: 'link-note', text: `✨ 持ち物の「${secretById(id)?.name}」が、ここで何かにつながりそう` })));
+}
+
+function foundNote(id) {
+  const s = secretById(id);
+  const n = (game.found || []).indexOf(id) + 1;
+  return el('div', { class: 'found-note', text: `✨ 見つけたもの：${s?.name}（今日 ${n || '?'}つめ）` });
 }
 
 function renderChat() {
@@ -554,6 +574,7 @@ function renderChat() {
     else if (e.t === 'msg') {
       log.append(bubble(e.role, e.text, e.usage));
       if (e.ambient) log.append(ambientNote(e.ambient));
+      for (const id of e.finds || []) log.append(foundNote(id));
     }
     else if (e.t === 'compress') log.append(el('div', { class: 'roll-note', text: '🧠 ここまでの思い出を整理したよ' }));
   }
@@ -603,14 +624,21 @@ async function askPersona() {
   try {
     // ペルソナがショーケースを近くで見ても、ユーザーには見せない（いつもの「…」のまま）
     const looks = [];
+    const finds = []; // この返事で見つけた隠しアイテム（返事が届いたら持ち物にする）
     let lookChars = 0;
     const res = await chat({
       ...aiArgs(),
       system: buildSystem(game),
       messages: buildMessages(game, settings.provider),
       onTool: (name, args) => {
-        const out = runTool(name, args);
+        let out = runTool(name, args);
         looks.push(String(args?.item || ''));
+        // 近くで見た品物の奥に、隠しアイテムがあれば確率で見つかる
+        const s = name === 'look_closer' && trySecret(String(args?.item || ''), { found: [...(game.found || []), ...finds] });
+        if (s) {
+          finds.push(s.id);
+          out += `\n\n${FOUND_TAG}${s.found}`;
+        }
         lookChars += out.length;
         return out;
       },
@@ -625,11 +653,16 @@ async function askPersona() {
     }
     game.log.push({
       t: 'msg', role: 'assistant', text, usage: res.usage, at: new Date().toISOString(),
-      looks, lookChars, raw: trimRaw(res.raw),
+      looks, lookChars, raw: trimRaw(res.raw), ...(finds.length ? { finds } : {}),
     });
+    if (finds.length) {
+      (game.found ||= []).push(...finds);
+      store.addToCollection(finds);
+    }
     addUsage(res.usage);
     persist();
     live.replaceWith(bubble('assistant', text, res.usage));
+    for (const id of finds) $('chat-log').append(foundNote(id));
   } catch (e) {
     live.remove();
     showError(e.message || String(e));

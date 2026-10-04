@@ -90,6 +90,17 @@ export function savePersonas(list) {
   return write('personas', list);
 }
 
+// ---- 夢の図鑑（これまでに見つけた隠しアイテム。ゲームをまたいで残す） ----
+export function loadCollection() {
+  return read('collection', []);
+}
+
+export function addToCollection(ids) {
+  const cur = new Set(loadCollection());
+  ids.forEach((id) => cur.add(id));
+  write('collection', [...cur]);
+}
+
 // ---- 進行中のゲーム ----
 export function loadGame() {
   return read('game', null);

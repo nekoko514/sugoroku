@@ -17,6 +17,7 @@ import { showcaseFor, findItem } from './data/showcase.js';
 export const ARRIVE_TAG = '【マス到着】';
 const SUMMARY_TAG = '【これまでの思い出（要約）】';
 const AMBIENT_TAG = '【まわりの様子】';
+export const FOUND_TAG = '【気づいたこと】';
 
 // ユーザーの発言に「まわりの様子」が添えられていれば、続けて書く
 function userText(e) {
@@ -66,6 +67,7 @@ function rules(p, u, cast) {
 - 気になったものがあれば、look_closer の道具で近くで見てください。素材・産地・味・作り方・由来などの詳しいことが分かります。道具を使ったことは${u}には見えません。
 - 分かったことは、${p}が自分の目で見て、味わって、ふれて知ったこととして、${p}の言葉で${u}に伝えてください。説明書を読み上げるようにはせず、${u}がその場にいるように感じられる描写にしてください。
 - ${u}が何かに興味を持ったときや、「どれがおすすめ？」と聞かれたときにも使えます。1回の返事で見られるのは3つまでです。
+- 近くで見た結果に「${FOUND_TAG}」があれば、${p}がそれに気づいたということです。見つけたものは二人の持ち物になります。${u}にも見せて、一緒に驚いたり、大事にしまったりしてください。あとでどこかでつながるかもしれません。
 ${cast
     ? `- 遊園地のスタッフやほかのお客さんとも、自然にやり取りしてかまいません。ただし主役は${p}と${u}の二人です。\n- 「${AMBIENT_TAG}」で誰かが話しかけてきたときは、${p}が短く応じてかまいません。その人はすぐに離れていくので、引き止めたり、会話を長引かせたりせず、また二人の時間に戻ってください。`
     : `- 遊園地のスタッフやほかのお客さんは、景色の一部として静かにそこにいるだけです。会話の相手にはせず、${p}と${u}の二人の時間を大切にしてください。`}
@@ -92,7 +94,7 @@ export function buildSystem(game) {
   ];
 }
 
-export function arrivalText({ square, step, total, time, seeds, route, personaName, userName, cast = true }) {
+export function arrivalText({ square, step, total, time, seeds, route, personaName, userName, cast = true, links = [] }) {
   const p = personaName;
   const u = userName?.trim() || 'ゲスト';
   const lines = [
@@ -108,6 +110,11 @@ export function arrivalText({ square, step, total, time, seeds, route, personaNa
     lines.push('');
     lines.push('ショーケース（気になるものは look_closer で近くで見られます）:');
     for (const it of items) lines.push(`- [${it.id}] ${it.name}：${it.short}`);
+  }
+  if (links.length) {
+    lines.push('');
+    lines.push(`二人の持ち物がきっかけで、ここでは次のことが起こります。持ち物があるからこそ起こる、今日だけの出来事です。ぜひ取り入れて、${u}と一緒に味わってください:`);
+    for (const l of links) lines.push(`- （持ち物「${l.name}」）${l.text}`);
   }
   lines.push('');
   lines.push(`種は全部使わなくて大丈夫です。${u}の様子を見ながら、${p}が気に入ったものを選んで、${p}らしく誘ってください。種のことは説明せず、${p}がもともと知っていたか、その場で見つけたように自然にふるまってください。`);

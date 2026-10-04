@@ -3,6 +3,7 @@
 // どちらにも APIキーは含めない。
 
 import { PARK, SQUARES } from './data/park.js';
+import { secretById } from './data/secrets.js';
 
 const squareById = Object.fromEntries(SQUARES.map((s) => [s.id, s]));
 
@@ -45,12 +46,20 @@ export function toMarkdown(game) {
       out.push('');
       out.push(`*${(e.step ?? e.index) + 1}マス目・${e.time}*`);
       out.push('');
+      for (const id of e.links || []) {
+        out.push(`*✨ 持ち物の「${secretById(id)?.name}」が、ここでつながった*`);
+        out.push('');
+      }
     } else if (e.t === 'msg') {
       const who = e.role === 'assistant' ? persona.name : me;
       out.push(`**${who}**：${e.text.replace(/\n/g, '  \n')}`);
       out.push('');
       if (e.ambient) {
         out.push(`*♪ ${e.ambient}*`);
+        out.push('');
+      }
+      for (const id of e.finds || []) {
+        out.push(`*✨ 見つけたもの：${secretById(id)?.name}*`);
         out.push('');
       }
     }
