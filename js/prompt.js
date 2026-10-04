@@ -16,6 +16,12 @@ import { showcaseFor, findItem } from './data/showcase.js';
 
 export const ARRIVE_TAG = '【マス到着】';
 const SUMMARY_TAG = '【これまでの思い出（要約）】';
+const AMBIENT_TAG = '【まわりの様子】';
+
+// ユーザーの発言に「まわりの様子」が添えられていれば、続けて書く
+function userText(e) {
+  return e.ambient ? `${e.text}\n\n${AMBIENT_TAG}${e.ambient}` : e.text;
+}
 
 // ペルソナがショーケースの品物を「近くで見る」ための道具。毎回同じものを渡す（キャッシュのため）
 export const TOOLS = [
@@ -52,6 +58,7 @@ function rules(p, u, cast) {
 - 施設に着いたら、${p}がエスコートしてください。デートの前に下調べをしてきた人のように、具体的なものごとを指さして、${u}を誘ってください。
 - ${u}が迷っていそうなときや、返事が短いときは、種の中から次の楽しみを差し出してください。
 - 「${SUMMARY_TAG}」は、これまでの出来事のメモです。覚えている思い出として扱ってください。
+- ${u}の発言のあとに「${AMBIENT_TAG}」が添えられていることがあります。これは、いま二人のまわりで起きた小さな変化で、${u}にも同じように感じられています。会話をさえぎらずに、さりげなく取り入れてもいいし、ふれなくてもかまいません。
 - ${u}が満足するまで、その場所で好きなだけ過ごしてかまいません。急いで次へ進めようとしないでください。
 
 # ショーケース
@@ -119,7 +126,7 @@ function recentTurns(game, provider) {
     if (e.t === 'arrive') out.push({ role: 'user', text: e.text });
     else if (e.t === 'msg' && e.role === 'assistant' && e.raw?.provider === provider && e.raw.messages?.length) {
       for (const m of e.raw.messages) out.push({ native: m });
-    } else if (e.t === 'msg') out.push({ role: e.role, text: e.text });
+    } else if (e.t === 'msg') out.push({ role: e.role, text: e.role === 'user' ? userText(e) : e.text });
   }
   return out;
 }
@@ -135,7 +142,7 @@ export function buildMessages(game, provider) {
 export function unsummarizedSize(game) {
   let n = 0;
   for (const e of game.log.slice(game.summaryUpto || 0)) {
-    if (e.t === 'arrive' || e.t === 'msg') n += e.text.length + (e.lookChars || 0);
+    if (e.t === 'arrive' || e.t === 'msg') n += e.text.length + (e.lookChars || 0) + (e.ambient?.length || 0);
   }
   return n;
 }

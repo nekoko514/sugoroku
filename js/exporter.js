@@ -49,6 +49,10 @@ export function toMarkdown(game) {
       const who = e.role === 'assistant' ? persona.name : me;
       out.push(`**${who}**：${e.text.replace(/\n/g, '  \n')}`);
       out.push('');
+      if (e.ambient) {
+        out.push(`*♪ ${e.ambient}*`);
+        out.push('');
+      }
     }
   }
 

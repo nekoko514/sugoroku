@@ -119,7 +119,8 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   overflow-x: hidden;
 }
-body.chat-open { overflow: hidden; }
+/* 会話を開いているあいだは、下の地図がスクロールして会話画面がずれないように止める */
+html.chat-open, html.chat-open body { overflow: hidden; height: 100%; }
 
 [hidden] { display: none !important; }
 h1, h2 { margin: 0; line-height: 1.3; }
@@ -607,6 +608,17 @@ span.icon-btn { background: transparent; box-shadow: none; }
 .msg.typing .msg-text:empty::after, .diary.typing p:empty::after { content: "…"; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0.3; } }
 .msg-usage { font-size: 0.68rem; color: var(--muted); padding: 2px 8px 0; }
+
+/* まわりの様子（BGMが変わった、風が吹いた、など）。二人とも感じていることなので、うっすら見せる */
+.ambient-note {
+  text-align: center;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--muted);
+  padding: 2px 16px;
+  animation: ambient-in 1.2s ease;
+}
+@keyframes ambient-in { from { opacity: 0; transform: translateY(4px); } }
 
 .chat-error, .chat-goal {
   margin: 0 16px 10px;

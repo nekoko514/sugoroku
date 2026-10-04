@@ -1,5 +1,6 @@
 import { PARK, START, timeOfDay, pickSeeds } from './data/park.js';
 import { NODES, TOTAL_STEPS, nextChoices, stepOf, renderMap, scrollToNode } from './map.js';
+import { pickAmbient } from './data/ambient.js';
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
 import {
@@ -87,13 +88,13 @@ function show(view) {
 
 function openChat() {
   $('view-chat').hidden = false;
-  document.body.classList.add('chat-open');
+  document.documentElement.classList.add('chat-open');
   renderChat();
 }
 
 function closeChat() {
   $('view-chat').hidden = true;
-  document.body.classList.remove('chat-open');
+  document.documentElement.classList.remove('chat-open');
   renderBoard();
 }
 
@@ -355,7 +356,11 @@ function renderBoard(scroll = true) {
   $('usage-total').textContent = s?.calls
     ? `ここまで ${s.calls}回の送信・${fmtUsage(s)}`
     : '';
-  if (scroll) requestAnimationFrame(() => scrollToNode($('map'), game.position));
+  if (scroll) {
+    requestAnimationFrame(() => {
+      if (!document.documentElement.classList.contains('chat-open')) scrollToNode($('map'), game.position);
+    });
+  }
 }
 
 function onMapTap(id) {
@@ -546,7 +551,10 @@ function renderChat() {
   for (const e of game.log) {
     if (e.t === 'roll') log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た${e.route ? `（🪧 ${e.route}へ）` : ''}` }));
     else if (e.t === 'arrive') log.append(placeCard(e));
-    else if (e.t === 'msg') log.append(bubble(e.role, e.text, e.usage));
+    else if (e.t === 'msg') {
+      log.append(bubble(e.role, e.text, e.usage));
+      if (e.ambient) log.append(ambientNote(e.ambient));
+    }
     else if (e.t === 'compress') log.append(el('div', { class: 'roll-note', text: '🧠 ここまでの思い出を整理したよ' }));
   }
   if (game.memory) {
@@ -639,11 +647,36 @@ $('chat-form').addEventListener('submit', (e) => {
   if (!text) return;
   $('chat-text').value = '';
   autosize();
-  game.log.push({ t: 'msg', role: 'user', text, at: new Date().toISOString() });
+  const ambient = nextAmbient();
+  game.log.push({ t: 'msg', role: 'user', text, at: new Date().toISOString(), ...(ambient ? { ambient: ambient.text } : {}) });
+  if (ambient) (game.ambientUsed ||= []).push(ambient.id);
   persist();
   $('chat-log').append(bubble('user', text));
+  if (ambient) $('chat-log').append(ambientNote(ambient.text));
   askPersona();
 });
+
+// 同じ場所で何回か話したら、ときどき「まわりの様子」が少し動く（BGMが変わる、風が吹く、など）
+const AMBIENT_AFTER = 3; // この回数話したら起こりうる
+const AMBIENT_CHANCE = 0.6; // 起こる確率
+function nextAmbient() {
+  let since = 0;
+  let where = null;
+  for (let i = game.log.length - 1; i >= 0; i--) {
+    const e = game.log[i];
+    if (e.t === 'arrive') { where = e; break; }
+    if (e.t === 'msg' && e.role === 'user') {
+      if (e.ambient) break;
+      since += 1;
+    }
+  }
+  if (!where || since + 1 < AMBIENT_AFTER || Math.random() >= AMBIENT_CHANCE) return null;
+  return pickAmbient(where.square, where.time, { cast: game.cast !== false, used: game.ambientUsed || [] });
+}
+
+function ambientNote(text) {
+  return el('div', { class: 'ambient-note', text: `♪ ${text}` });
+}
 
 // Enterで送信、Shift+Enterで改行（スマホのキーボードでは改行ボタンのまま）
 $('chat-text').addEventListener('keydown', (e) => {
