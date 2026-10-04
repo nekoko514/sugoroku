@@ -12,11 +12,29 @@
 // 混ざらないようにして、本人がすんなり受け入れられるようにするため。
 
 import { PARK } from './data/park.js';
+import { showcaseFor, findItem } from './data/showcase.js';
 
 export const ARRIVE_TAG = '【マス到着】';
 const SUMMARY_TAG = '【これまでの思い出（要約）】';
 
-function rules(p, u) {
+// ペルソナがショーケースの品物を「近くで見る」ための道具。毎回同じものを渡す（キャッシュのため）
+export const TOOLS = [
+  {
+    name: 'look_closer',
+    description: 'ショーケースの品物を近くで見て、詳しいこと（素材・産地・味・舌ざわり・作り方・由来など）を知る。結果は自分にだけ届き、相手には見えない。',
+    params: { item: '見たい品物のID（ショーケースの [ ] の中の英数字）' },
+  },
+];
+
+// 道具が呼ばれたときの答え
+export function runTool(name, args) {
+  if (name !== 'look_closer') return `「${name}」という道具はありません。`;
+  const it = findItem(args?.item);
+  if (!it) return 'その品物は見つかりませんでした。ショーケースの [ ] の中のIDを使ってください。';
+  return `【近くで見た】${it.name}\n${it.detail}`;
+}
+
+function rules(p, u, cast) {
   return `${p}（あなた）は、${u}と一緒に、遊園地「${PARK.name}」ですごろくをしながら一日を過ごします。
 
 # この世界について
@@ -34,6 +52,16 @@ function rules(p, u) {
 - 施設に着いたら、${p}がエスコートしてください。デートの前に下調べをしてきた人のように、具体的なものごとを指さして、${u}を誘ってください。
 - ${u}が迷っていそうなときや、返事が短いときは、種の中から次の楽しみを差し出してください。
 - 「${SUMMARY_TAG}」は、これまでの出来事のメモです。覚えている思い出として扱ってください。
+- ${u}が満足するまで、その場所で好きなだけ過ごしてかまいません。急いで次へ進めようとしないでください。
+
+# ショーケース
+- 案内の「ショーケース」には、その場所で見たり選んだりできるものが、名前と一言だけ並んでいます。
+- 気になったものがあれば、look_closer の道具で近くで見てください。素材・産地・味・作り方・由来などの詳しいことが分かります。道具を使ったことは${u}には見えません。
+- 分かったことは、${p}が自分の目で見て、味わって、ふれて知ったこととして、${p}の言葉で${u}に伝えてください。説明書を読み上げるようにはせず、${u}がその場にいるように感じられる描写にしてください。
+- ${u}が何かに興味を持ったときや、「どれがおすすめ？」と聞かれたときにも使えます。1回の返事で見られるのは3つまでです。
+${cast
+    ? `- 遊園地のスタッフやほかのお客さんとも、自然にやり取りしてかまいません。ただし主役は${p}と${u}の二人です。`
+    : `- 遊園地のスタッフやほかのお客さんは、景色の一部として静かにそこにいるだけです。会話の相手にはせず、${p}と${u}の二人の時間を大切にしてください。`}
 
 # 話し方
 - ${p}として、${p}の口調で話してください。ゲームのルールやAIであることには触れないでください。
@@ -52,12 +80,12 @@ function personaBlock(persona) {
 
 export function buildSystem(game) {
   return [
-    { text: rules(game.persona.name, game.userName?.trim() || 'ゲスト'), cache: false },
+    { text: rules(game.persona.name, game.userName?.trim() || 'ゲスト', game.cast !== false), cache: false },
     { text: personaBlock(game.persona), cache: true },
   ];
 }
 
-export function arrivalText({ square, step, total, time, seeds, route, personaName, userName }) {
+export function arrivalText({ square, step, total, time, seeds, route, personaName, userName, cast = true }) {
   const p = personaName;
   const u = userName?.trim() || 'ゲスト';
   const lines = [
@@ -68,6 +96,12 @@ export function arrivalText({ square, step, total, time, seeds, route, personaNa
   lines.push('');
   lines.push(`${p}だけが知っている、この場所の楽しみの種:`);
   for (const sd of seeds) lines.push(`- ${sd}`);
+  const items = showcaseFor(square.id, { cast });
+  if (items.length) {
+    lines.push('');
+    lines.push('ショーケース（気になるものは look_closer で近くで見られます）:');
+    for (const it of items) lines.push(`- [${it.id}] ${it.name}：${it.short}`);
+  }
   lines.push('');
   lines.push(`種は全部使わなくて大丈夫です。${u}の様子を見ながら、${p}が気に入ったものを選んで、${p}らしく誘ってください。種のことは説明せず、${p}がもともと知っていたか、その場で見つけたように自然にふるまってください。`);
   if (square.kind === 'start') lines.push('ここは夢の始まりです。気がつくと二人で遊園地のゲートの前にいた、というところから始めてください。');
@@ -76,41 +110,50 @@ export function arrivalText({ square, step, total, time, seeds, route, personaNa
   return lines.join('\n');
 }
 
-// 要約していない部分の会話（ログの summaryUpto 以降）
-function recentTurns(game) {
+// 要約していない部分の会話（ログの summaryUpto 以降）。
+// 同じAIで作った返事は、道具のやり取りや考えた記録ごと、そのままの形で送り返す（キャッシュと、AIの決まりのため）。
+// 別のAIに切り替えたときは、返事の文字だけを送る。
+function recentTurns(game, provider) {
   const out = [];
   for (const e of game.log.slice(game.summaryUpto || 0)) {
     if (e.t === 'arrive') out.push({ role: 'user', text: e.text });
-    else if (e.t === 'msg') out.push({ role: e.role, text: e.text });
+    else if (e.t === 'msg' && e.role === 'assistant' && e.raw?.provider === provider && e.raw.messages?.length) {
+      for (const m of e.raw.messages) out.push({ native: m });
+    } else if (e.t === 'msg') out.push({ role: e.role, text: e.text });
   }
   return out;
 }
 
-export function buildMessages(game) {
+export function buildMessages(game, provider) {
   const msgs = [];
   if (game.summary) msgs.push({ role: 'user', text: `${SUMMARY_TAG}\n${game.summary}` });
-  msgs.push(...recentTurns(game));
+  msgs.push(...recentTurns(game, provider));
   return msgs;
 }
 
-// 要約していない会話のおおよその長さ（文字数）
+// 要約していない会話のおおよその長さ（文字数。近くで見た品物の情報も含める）
 export function unsummarizedSize(game) {
-  return recentTurns(game).reduce((n, m) => n + m.text.length, 0);
+  let n = 0;
+  for (const e of game.log.slice(game.summaryUpto || 0)) {
+    if (e.t === 'arrive' || e.t === 'msg') n += e.text.length + (e.lookChars || 0);
+  }
+  return n;
 }
 
 // 圧縮: いつもの会話の末尾にお願いを足して送る。
 // 先頭は直前のリクエストと同じなので、この要約の呼び出し自体もキャッシュに当たる。
-export function compressionRequest(game) {
+export function compressionRequest(game, provider) {
   const ask = `【ゲームからのお願い：記憶の整理】
 ここまでの出来事を、あとで思い出せるように箇条書きのメモにまとめてください。
 - これまでの要約がある場合は、その内容も含めて1つにまとめ直してください。
 - 訪れた施設の順番、そこで起きたこと、手に入れたもの、交わした約束、印象に残った言葉や気持ちを残してください。
-- キャラクターの口調ではなく、事実のメモとして書いてください。前置きや締めの言葉は不要です。`;
-  return [...buildMessages(game), { role: 'user', text: ask }];
+- 近くで見た品物の、印象に残った特徴（味や手ざわりなど）も短く残してください。
+- キャラクターの口調ではなく、事実のメモとして書いてください。前置きや締めの言葉は不要です。道具は使わないでください。`;
+  return [...buildMessages(game, provider), { role: 'user', text: ask }];
 }
 
 // ゴールしたあとの「ゆうべの夢の日記」
-export function memoryRequest(game) {
+export function memoryRequest(game, provider) {
   const p = game.persona.name;
   const u = game.userName;
   const ask = `【ゲームからのお願い：夢の日記】
@@ -118,6 +161,6 @@ export function memoryRequest(game) {
 - 訪れた場所と、そこでの出来事を順番に振り返ってください。
 - 夢だったけれど、感じたことや交わした言葉は心に残っている、という気持ちで書いてください。
 - ${u}への気持ちも、${p}らしい言葉で添えてください。
-- 見出しや箇条書きは使わず、400〜800文字くらいの文章にしてください。`;
-  return [...buildMessages(game), { role: 'user', text: ask }];
+- 見出しや箇条書きは使わず、400〜800文字くらいの文章にしてください。道具は使わないでください。`;
+  return [...buildMessages(game, provider), { role: 'user', text: ask }];
 }

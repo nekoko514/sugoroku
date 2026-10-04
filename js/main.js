@@ -3,7 +3,7 @@ import { NODES, TOTAL_STEPS, nextChoices, stepOf, renderMap, scrollToNode } from
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
 import {
-  buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize,
+  buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize, TOOLS, runTool,
 } from './prompt.js';
 import { toMarkdown, toJson, parseSave, fileBaseName, saveFile } from './exporter.js';
 
@@ -259,6 +259,7 @@ $('btn-settings').addEventListener('click', openSettings);
 
 function openPicker() {
   $('pick-username').value = settings.userName;
+  $('pick-cast').checked = settings.cast !== false;
   const list = $('pick-list');
   list.replaceChildren();
   $('pick-empty').hidden = personas.length > 0;
@@ -273,8 +274,9 @@ function openPicker() {
             $('pick-username').focus();
             return;
           }
-          if (name !== settings.userName) {
-            settings = { ...settings, userName: name };
+          const cast = $('pick-cast').checked;
+          if (name !== settings.userName || cast !== (settings.cast !== false)) {
+            settings = { ...settings, userName: name, cast };
             store.saveSettings(settings);
           }
           $('dlg-pick').close();
@@ -295,6 +297,8 @@ function startGame(persona) {
     // 途中でペルソナを編集しても会話が崩れない（キャッシュも保たれる）ように、開始時の内容を写しておく
     persona: { id: persona.id, name: persona.name, emoji: persona.emoji, systemPrompt: persona.systemPrompt, knowledge: persona.knowledge },
     userName: settings.userName,
+    // スタッフなどほかの登場人物を出すか。ルールの文が変わるので、その一日のあいだは固定
+    cast: settings.cast !== false,
     position: START,
     trail: [START], // 通ったマス（地図に足あとを描く）
     rolls: 0,
@@ -315,8 +319,9 @@ function arrive(id, route) {
   const square = NODES[id];
   const step = stepOf(id);
   const time = timeOfDay(step, TOTAL_STEPS);
-  const seeds = pickSeeds(square, time);
-  const text = arrivalText({ square, step, total: TOTAL_STEPS, time, seeds, route, personaName: game.persona.name, userName: game.userName });
+  const cast = game.cast !== false;
+  const seeds = pickSeeds(square, time, { cast });
+  const text = arrivalText({ square, step, total: TOTAL_STEPS, time, seeds, route, cast, personaName: game.persona.name, userName: game.userName });
   game.log.push({ t: 'arrive', square: id, step, time, seeds, route, text });
   if (square.kind === 'goal') game.finished = true;
   persist();
@@ -482,7 +487,7 @@ async function compress() {
   const res = await chat({
     ...aiArgs(),
     system: buildSystem(game),
-    messages: compressionRequest(game),
+    messages: compressionRequest(game, settings.provider),
   });
   if (!res.text.trim()) throw new Error('要約が空だった');
   addUsage(res.usage);
@@ -500,7 +505,21 @@ function aiArgs() {
     model: settings.models[settings.provider],
     key: store.getKey(settings.provider),
     deepseekViaProxy: settings.deepseekViaProxy,
+    tools: TOOLS, // 使わない呼び出しでも毎回同じものを渡す（キャッシュのため）
+    onTool: runTool,
   };
+}
+
+// 最後のやり取りが「考えた記録だけ」で文字がないときは、送り返すと嫌がられることがあるので外す
+function trimRaw(raw) {
+  const msgs = [...(raw?.messages || [])];
+  const hasText = (m) => {
+    if (m.parts) return m.parts.some((p) => p.text || p.functionCall);
+    if (Array.isArray(m.content)) return m.content.some((b) => (b.type === 'text' && b.text) || b.type === 'tool_use');
+    return !!m.content || !!m.tool_calls;
+  };
+  while (msgs.length && !hasText(msgs[msgs.length - 1])) msgs.pop();
+  return { ...raw, messages: msgs };
 }
 
 function bubble(role, text, usage) {
@@ -574,10 +593,19 @@ async function askPersona() {
   scrollChat();
   const textNode = live.querySelector('.msg-text');
   try {
+    // ペルソナがショーケースを近くで見ても、ユーザーには見せない（いつもの「…」のまま）
+    const looks = [];
+    let lookChars = 0;
     const res = await chat({
       ...aiArgs(),
       system: buildSystem(game),
-      messages: buildMessages(game),
+      messages: buildMessages(game, settings.provider),
+      onTool: (name, args) => {
+        const out = runTool(name, args);
+        looks.push(String(args?.item || ''));
+        lookChars += out.length;
+        return out;
+      },
       onText: (t) => { textNode.textContent += t; scrollChat(); },
     });
     const text = res.text.trim();
@@ -587,7 +615,10 @@ async function askPersona() {
       showError(`返事が空っぽだったよ${why}。もう一度試してみてね。`);
       return;
     }
-    game.log.push({ t: 'msg', role: 'assistant', text, usage: res.usage, at: new Date().toISOString() });
+    game.log.push({
+      t: 'msg', role: 'assistant', text, usage: res.usage, at: new Date().toISOString(),
+      looks, lookChars, raw: trimRaw(res.raw),
+    });
     addUsage(res.usage);
     persist();
     live.replaceWith(bubble('assistant', text, res.usage));
@@ -630,7 +661,12 @@ function autosize() {
 $('chat-text').addEventListener('input', autosize);
 
 $('btn-retry').addEventListener('click', () => askPersona());
-$('btn-next').addEventListener('click', closeChat);
+// 話し足りたら、会話画面からそのままサイコロを振る
+$('btn-next').addEventListener('click', () => {
+  if (busy || game.finished) return;
+  closeChat();
+  rollDice();
+});
 $('btn-close-chat').addEventListener('click', closeChat);
 
 $('btn-memory').addEventListener('click', async () => {
@@ -649,7 +685,7 @@ $('btn-memory').addEventListener('click', async () => {
     const res = await chat({
       ...aiArgs(),
       system: buildSystem(game),
-      messages: memoryRequest(game),
+      messages: memoryRequest(game, settings.provider),
       onText: (t) => { p.textContent += t; scrollChat(); },
     });
     if (!res.text.trim()) throw new Error('日記が空っぽだったよ。もう一度試してみてね。');

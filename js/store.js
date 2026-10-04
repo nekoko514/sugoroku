@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS = {
   rememberKeys: true,
   deepseekViaProxy: false,
   userName: '',
+  cast: true, // スタッフなど、ほかの登場人物も出す
   compressAt: 8000, // 要約していない会話がこの文字数を超えたら、次のマスへ進む前に圧縮する
 };
 
