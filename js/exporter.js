@@ -39,6 +39,10 @@ export function toMarkdown(game) {
           out.push('');
           out.push(`🪧 分かれ道で「${pendingRoll.route}」を選んだ`);
         }
+        if (pendingRoll.pulledBy) {
+          out.push('');
+          out.push(`✨ 持ち物の「${secretById(pendingRoll.pulledBy[0])?.name}」に引き寄せられて、ここで足が止まった`);
+        }
         pendingRoll = null;
       } else {
         out.push(`## ${sq.emoji} ${sq.name}からスタート`);

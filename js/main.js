@@ -471,6 +471,7 @@ async function rollDice() {
 
     const from = game.position;
     let route = null;
+    let pulledBy = null; // 持ち物に引き寄せられて、途中で止まったとき
     $('board-message').textContent = `${value}が出た！`;
     // 1マスずつ進める。分かれ道では止まって、どっちへ行くか選んでもらう
     for (let left = value; left > 0; left--) {
@@ -486,11 +487,19 @@ async function rollDice() {
       game.trail.push(next.to);
       renderBoard();
       await wait(320);
+      // 持ち物がつながるマスは、通り過ぎずにそこで止まる（せっかく見つけたものが無駄にならないように）
+      const pull = linksAt(next.to, game.found || []);
+      if (pull.length && left > 1) {
+        pulledBy = pull.map((l) => l.id);
+        $('board-message').textContent = `✨ 持ち物の「${pull[0].name}」に引き寄せられて、ここで足が止まった`;
+        await wait(1200);
+        break;
+      }
     }
     const sq = currentSquare();
     game.rolls += 1;
-    game.log.push({ t: 'roll', n: game.rolls, value, from, to: game.position, route });
-    $('board-message').textContent = `${value}が出た！ ${sq.emoji} ${sq.name}に止まったよ`;
+    game.log.push({ t: 'roll', n: game.rolls, value, from, to: game.position, route, ...(pulledBy ? { pulledBy } : {}) });
+    if (!pulledBy) $('board-message').textContent = `${value}が出た！ ${sq.emoji} ${sq.name}に止まったよ`;
     arrive(game.position, route);
     await wait(700);
   } finally {
@@ -569,7 +578,10 @@ function renderChat() {
   const log = $('chat-log');
   log.replaceChildren();
   for (const e of game.log) {
-    if (e.t === 'roll') log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た${e.route ? `（🪧 ${e.route}へ）` : ''}` }));
+    if (e.t === 'roll') {
+      log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た${e.route ? `（🪧 ${e.route}へ）` : ''}` }));
+      if (e.pulledBy) log.append(el('div', { class: 'found-note', text: `✨ 持ち物の「${secretById(e.pulledBy[0])?.name}」に引き寄せられて、ここで足が止まった` }));
+    }
     else if (e.t === 'arrive') log.append(placeCard(e));
     else if (e.t === 'msg') {
       log.append(bubble(e.role, e.text, e.usage));
