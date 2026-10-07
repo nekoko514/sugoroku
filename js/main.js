@@ -2,6 +2,7 @@ import { PARK, START, timeOfDay, pickSeeds } from './data/park.js';
 import { NODES, TOTAL_STEPS, nextChoices, stepOf, renderMap, scrollToNode } from './map.js';
 import { pickAmbient } from './data/ambient.js';
 import { SECRETS, trySecret, linksAt, linkText, secretById } from './data/secrets.js';
+import { promptAt, promptById } from './data/prompts.js';
 import * as store from './store.js';
 import { chat, listModels, PROVIDERS, MODEL_SUGGESTIONS } from './llm.js';
 import {
@@ -472,6 +473,7 @@ async function rollDice() {
     const from = game.position;
     let route = null;
     let pulledBy = null; // 持ち物に引き寄せられて、途中で止まったとき
+    let halted = false; // 止まりマスで止まったとき
     $('board-message').textContent = `${value}が出た！`;
     // 1マスずつ進める。分かれ道では止まって、どっちへ行くか選んでもらう
     for (let left = value; left > 0; left--) {
@@ -495,11 +497,18 @@ async function rollDice() {
         await wait(1200);
         break;
       }
+      // 止まりマス（お題のある施設など）も、通り過ぎずにそこで止まる
+      if (NODES[next.to].stop && left > 1) {
+        halted = true;
+        $('board-message').textContent = NODES[next.to].stopNote || `${NODES[next.to].name}で足が止まった`;
+        await wait(1200);
+        break;
+      }
     }
     const sq = currentSquare();
     game.rolls += 1;
-    game.log.push({ t: 'roll', n: game.rolls, value, from, to: game.position, route, ...(pulledBy ? { pulledBy } : {}) });
-    if (!pulledBy) $('board-message').textContent = `${value}が出た！ ${sq.emoji} ${sq.name}に止まったよ`;
+    game.log.push({ t: 'roll', n: game.rolls, value, from, to: game.position, route, ...(pulledBy ? { pulledBy } : {}), ...(halted ? { halted } : {}) });
+    if (!pulledBy && !halted) $('board-message').textContent = `${value}が出た！ ${sq.emoji} ${sq.name}に止まったよ`;
     arrive(game.position, route);
     await wait(700);
   } finally {
@@ -568,6 +577,36 @@ function placeCard(e) {
     ...(e.links || []).map((id) => el('p', { class: 'link-note', text: `✨ 持ち物の「${secretById(id)?.name}」が、ここで何かにつながりそう` })));
 }
 
+function promptNote(id) {
+  const pr = promptById(id);
+  return el('div', { class: 'roll-note', text: `${pr?.emoji || '✨'} お題：${pr?.title || ''}` });
+}
+
+// お題の答えを、見出しつきのカードにする（見出しは「### 」の行。太字は **…**）
+function promptCard(id, text, usage) {
+  const pr = promptById(id);
+  const card = el('div', { class: 'prompt-card' },
+    el('div', { class: 'msg-who', text: `${game.persona.emoji || ''} ${game.persona.name}から` }),
+    el('div', { class: 'place-name', text: `${pr?.emoji || '✨'} ${pr?.title || ''}` }));
+  for (const block of text.split(/\n{2,}/)) {
+    for (const line of block.split('\n')) {
+      const t = line.trim();
+      if (!t) continue;
+      if (t.startsWith('#')) {
+        card.append(el('h4', { text: t.replace(/^#+\s*/, '') }));
+      } else {
+        const p = el('p');
+        t.replace(/^[-*]\s+/, '・').split('**').forEach((part, i) => {
+          if (part) p.append(i % 2 ? el('strong', { text: part }) : document.createTextNode(part));
+        });
+        card.append(p);
+      }
+    }
+  }
+  if (usage) card.append(el('div', { class: 'msg-usage', text: fmtUsage(usage) }));
+  return card;
+}
+
 function foundNote(id) {
   const s = secretById(id);
   const n = (game.found || []).indexOf(id) + 1;
@@ -581,9 +620,14 @@ function renderChat() {
     if (e.t === 'roll') {
       log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た${e.route ? `（🪧 ${e.route}へ）` : ''}` }));
       if (e.pulledBy) log.append(el('div', { class: 'found-note', text: `✨ 持ち物の「${secretById(e.pulledBy[0])?.name}」に引き寄せられて、ここで足が止まった` }));
+      if (e.halted) log.append(el('div', { class: 'found-note', text: NODES[e.to]?.stopNote || '' }));
     }
     else if (e.t === 'arrive') log.append(placeCard(e));
-    else if (e.t === 'msg') {
+    else if (e.t === 'msg' && e.prompt) {
+      log.append(promptNote(e.prompt)); // お題の本文は見せない
+    } else if (e.t === 'msg' && e.card) {
+      log.append(promptCard(e.card, e.text, e.usage));
+    } else if (e.t === 'msg') {
       log.append(bubble(e.role, e.text, e.usage));
       if (e.ambient) log.append(ambientNote(e.ambient));
       for (const id of e.finds || []) log.append(foundNote(id));
@@ -600,10 +644,32 @@ function renderChat() {
   $('chat-place').textContent = `${sq.emoji} ${sq.name}`;
   $('chat-sub').textContent = `${game.persona.emoji || ''} ${game.persona.name}と一緒`;
   $('chat-goal').hidden = !game.finished;
+  updatePromptButton(sq);
   $('btn-next').hidden = game.finished;
   updateChatControls();
   scrollChat();
 }
+
+// いる施設にお題があって、まだ出していなければ、ボタンを出す
+function updatePromptButton(sq) {
+  const pr = promptAt(sq?.id);
+  const done = pr && game.log.some((e) => e.t === 'msg' && e.prompt === pr.id);
+  $('btn-prompt').hidden = !pr || done;
+  if (pr) $('btn-prompt').textContent = pr.button;
+}
+
+$('btn-prompt').addEventListener('click', () => {
+  if (busy) return;
+  const sq = NODES[lastArrive()?.square];
+  const pr = promptAt(sq?.id);
+  if (!pr) return;
+  const text = pr.text(game.persona.name, game.userName?.trim() || 'ゲスト');
+  game.log.push({ t: 'msg', role: 'user', text, prompt: pr.id, at: new Date().toISOString() });
+  persist();
+  $('chat-log').append(promptNote(pr.id));
+  $('btn-prompt').hidden = true;
+  askPersona({ card: pr.id });
+});
 
 function scrollChat() {
   const log = $('chat-log');
@@ -612,6 +678,7 @@ function scrollChat() {
 
 function updateChatControls() {
   $('btn-send').disabled = busy;
+  $('btn-prompt').disabled = busy;
   $('btn-next').disabled = busy;
   $('btn-memory').disabled = busy;
   $('btn-memory').textContent = game?.memory ? '📔 夢日記を書き直してもらう' : '📔 目が覚めたら、夢日記を書いてもらう';
@@ -623,7 +690,7 @@ function showError(message) {
 }
 
 // 会話の末尾（マス到着かユーザーの発言）に、ペルソナが返事をする
-async function askPersona() {
+async function askPersona({ card = null } = {}) {
   if (busy) return;
   busy = true;
   $('chat-error').hidden = true;
@@ -665,7 +732,7 @@ async function askPersona() {
     }
     game.log.push({
       t: 'msg', role: 'assistant', text, usage: res.usage, at: new Date().toISOString(),
-      looks, lookChars, raw: trimRaw(res.raw), ...(finds.length ? { finds } : {}),
+      looks, lookChars, raw: trimRaw(res.raw), ...(finds.length ? { finds } : {}), ...(card ? { card } : {}),
     });
     if (finds.length) {
       (game.found ||= []).push(...finds);
@@ -673,7 +740,7 @@ async function askPersona() {
     }
     addUsage(res.usage);
     persist();
-    live.replaceWith(bubble('assistant', text, res.usage));
+    live.replaceWith(card ? promptCard(card, text, res.usage) : bubble('assistant', text, res.usage));
     for (const id of finds) $('chat-log').append(foundNote(id));
   } catch (e) {
     live.remove();

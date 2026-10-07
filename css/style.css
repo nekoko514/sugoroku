@@ -631,6 +631,19 @@ span.icon-btn { background: transparent; box-shadow: none; }
 .found-note { padding: 2px 16px; }
 .place-card .link-note { text-align: left; margin-top: 8px; }
 
+/* お題のボタンと、答えのカード */
+.prompt-btn { margin: 0 16px 10px; }
+.prompt-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: inset 0 3px 0 var(--glow), 0 6px 0 var(--gold-deep), 0 0 0 3px var(--gold), 0 12px 18px var(--shade);
+  margin-bottom: 6px;
+}
+.prompt-card h4 { margin: 16px 0 4px; font-size: 1rem; }
+.prompt-card p { margin: 6px 0 0; line-height: 1.8; overflow-wrap: anywhere; }
+.prompt-card .msg-who { padding: 0; }
+
 /* 夢の図鑑 */
 .book-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .book-list li {

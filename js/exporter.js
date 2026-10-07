@@ -4,6 +4,7 @@
 
 import { PARK, SQUARES } from './data/park.js';
 import { secretById } from './data/secrets.js';
+import { promptById } from './data/prompts.js';
 
 const squareById = Object.fromEntries(SQUARES.map((s) => [s.id, s]));
 
@@ -39,6 +40,10 @@ export function toMarkdown(game) {
           out.push('');
           out.push(`🪧 分かれ道で「${pendingRoll.route}」を選んだ`);
         }
+        if (pendingRoll.halted) {
+          out.push('');
+          out.push(squareById[pendingRoll.to]?.stopNote || '');
+        }
         if (pendingRoll.pulledBy) {
           out.push('');
           out.push(`✨ 持ち物の「${secretById(pendingRoll.pulledBy[0])?.name}」に引き寄せられて、ここで足が止まった`);
@@ -54,6 +59,15 @@ export function toMarkdown(game) {
         out.push(`*✨ 持ち物の「${secretById(id)?.name}」が、ここでつながった*`);
         out.push('');
       }
+    } else if (e.t === 'msg' && e.prompt) {
+      const pr = promptById(e.prompt);
+      out.push(`### ${pr?.emoji || ''} お題：${pr?.title || ''}`);
+      out.push('');
+    } else if (e.t === 'msg' && e.card) {
+      out.push(`> **${persona.name}から**`);
+      out.push('>');
+      for (const line of e.text.split('\n')) out.push(line.trim().startsWith('#') ? `> ${line.replace(/^#+\s*/, '#### ')}` : `> ${line}`);
+      out.push('');
     } else if (e.t === 'msg') {
       const who = e.role === 'assistant' ? persona.name : me;
       out.push(`**${who}**：${e.text.replace(/\n/g, '  \n')}`);

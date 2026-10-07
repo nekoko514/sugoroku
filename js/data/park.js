@@ -207,6 +207,25 @@ export const SQUARES = [
     ],
   },
   {
+    id: 'salon',
+    kind: 'facility',
+    emoji: '☕',
+    name: 'ブレンドサロン',
+    hint: '大切な人に一杯を淹れるサロン',
+    // 止まりマス: サイコロの目が余っていても、ここで止まる
+    stop: true,
+    stopNote: '☕ いい香りに誘われて、ここで足が止まった',
+    scene: '古い洋館の一階を使った、小さなティーサロン。壁一面の棚に茶葉や豆の缶が並び、窓ぎわには、お客さんが自分で一杯を淹れられる真鍮のカウンターがある。',
+    seeds: [
+      'このサロンには「大切な人のために、自分で一杯を淹れる」ためのカウンターがある。棚の茶葉や豆、スパイスは自由に使っていい。',
+      '銅のやかんが、カウンターの奥でいつもしゅんしゅんと湯気を立てている。',
+      '器の棚には、国も時代もばらばらのカップや湯のみが並んでいて、相手に合うものを選べる。',
+      'カウンターの端に、これまでここで淹れられた一杯のレシピを書きとめたノートがある。',
+      { text: '店主の老婦人が、茶葉の缶のふたを開けて香りをかがせてくれる。', cast: true },
+      { text: '窓から差す光が、カウンターの真鍮に反射して、天井に揺れる光の輪をつくる。', chance: 0.4 },
+    ],
+  },
+  {
     id: 'clock',
     kind: 'facility',
     emoji: '🕰️',
@@ -488,29 +507,30 @@ export const SQUARES = [
 // ---- 地図（すごろくの道） ----
 // 下の入場ゲートから、上の夜空の花火へ向かって進む。
 // x, y は地図上の位置（幅360の座標）。next は次のマス、branches は分かれ道。
-export const MAP_SIZE = { w: 360, h: 1900 };
+export const MAP_SIZE = { w: 360, h: 1990 };
 export const START = 'gate';
 
 export const ROUTE = {
-  gate: { x: 180, y: 1835, next: 'fountain' },
-  fountain: { x: 180, y: 1740, next: 'railway' },
-  railway: { x: 100, y: 1650, next: 'balloon' },
+  gate: { x: 180, y: 1925, next: 'fountain' },
+  fountain: { x: 180, y: 1830, next: 'railway' },
+  railway: { x: 100, y: 1740, next: 'balloon' },
   balloon: {
-    x: 180, y: 1555,
+    x: 180, y: 1645,
     branches: [
       { to: 'merry', label: 'きらきらの道' },
       { to: 'shooting', label: 'ドキドキの道' },
     ],
   },
-  merry: { x: 78, y: 1465, next: 'cups' },
-  cups: { x: 56, y: 1370, next: 'photo' },
-  photo: { x: 92, y: 1278, next: 'glasshouse' },
-  glasshouse: { x: 66, y: 1185, next: 'churros' },
-  shooting: { x: 282, y: 1465, next: 'coaster' },
-  coaster: { x: 304, y: 1370, next: 'haunted' },
-  haunted: { x: 268, y: 1278, next: 'swing' },
-  swing: { x: 294, y: 1185, next: 'churros' },
-  churros: { x: 180, y: 1105, next: 'glass' },
+  merry: { x: 78, y: 1555, next: 'cups' },
+  cups: { x: 56, y: 1460, next: 'photo' },
+  photo: { x: 92, y: 1368, next: 'glasshouse' },
+  glasshouse: { x: 66, y: 1275, next: 'churros' },
+  shooting: { x: 282, y: 1555, next: 'coaster' },
+  coaster: { x: 304, y: 1460, next: 'haunted' },
+  haunted: { x: 268, y: 1368, next: 'swing' },
+  swing: { x: 294, y: 1275, next: 'churros' },
+  churros: { x: 180, y: 1195, next: 'salon' },
+  salon: { x: 264, y: 1110, next: 'glass' },
   glass: { x: 96, y: 1025, next: 'clock' },
   clock: { x: 256, y: 952, next: 'bench' },
   bench: {
@@ -554,13 +574,13 @@ export const DECOR = [
   { e: '🎪', x: 30, y: 900, s: 32 },
   { e: '🌳', x: 335, y: 1080, s: 30 },
   { e: '🌳', x: 24, y: 1100, s: 26 },
-  { e: '🌸', x: 180, y: 1300, s: 22 },
-  { e: '🌳', x: 180, y: 1420, s: 26 },
-  { e: '🌳', x: 22, y: 1560, s: 28 },
-  { e: '🌳', x: 340, y: 1610, s: 30 },
-  { e: '🛤️', x: 260, y: 1690, s: 26 },
-  { e: '🌼', x: 70, y: 1780, s: 20 },
-  { e: '🌼', x: 290, y: 1800, s: 18 },
-  { e: '🌳', x: 40, y: 1870, s: 26 },
-  { e: '🌳', x: 320, y: 1872, s: 28 },
+  { e: '🌸', x: 180, y: 1390, s: 22 },
+  { e: '🌳', x: 180, y: 1510, s: 26 },
+  { e: '🌳', x: 22, y: 1650, s: 28 },
+  { e: '🌳', x: 340, y: 1700, s: 30 },
+  { e: '🛤️', x: 260, y: 1780, s: 26 },
+  { e: '🌼', x: 70, y: 1870, s: 20 },
+  { e: '🌼', x: 290, y: 1890, s: 18 },
+  { e: '🌳', x: 40, y: 1960, s: 26 },
+  { e: '🌳', x: 320, y: 1962, s: 28 },
 ];
