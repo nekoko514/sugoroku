@@ -669,7 +669,9 @@ span.icon-btn { background: transparent; box-shadow: none; }
   border-radius: 16px;
 }
 .chat-error span { flex: 1; overflow-wrap: anywhere; }
-.chat-goal { flex-direction: column; align-items: stretch; }
+.chat-goal { flex-direction: row; align-items: stretch; }
+/* ゴールでは長い物語や日記を読むので、下のボタンは小さく横に並べる */
+.chat-goal .btn { flex: 1; min-height: 40px; padding: 8px 10px; font-size: 0.88rem; }
 
 .chat-input {
   display: flex;

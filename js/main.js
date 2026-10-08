@@ -681,7 +681,7 @@ function updateChatControls() {
   $('btn-prompt').disabled = busy;
   $('btn-next').disabled = busy;
   $('btn-memory').disabled = busy;
-  $('btn-memory').textContent = game?.memory ? '📔 夢日記を書き直してもらう' : '📔 目が覚めたら、夢日記を書いてもらう';
+  $('btn-memory').textContent = game?.memory ? '📔 夢日記をもう一度' : '📔 夢日記を書いてもらう';
 }
 
 function showError(message) {
