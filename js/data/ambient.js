@@ -51,6 +51,10 @@ export const AMBIENT_AT = {
     { id: 'fountain-show', text: '噴水のショーが始まって、水柱が音楽に合わせて空へ伸びた。' },
     { id: 'fountain-mist', text: '風向きが変わって、噴水の細かいしぶきが頬にふれた。' },
   ],
+  books: [
+    { id: 'books-cameo', cast: true, text: '本を抱えた店主が、はしごの上から「その棚の三段目、いい本が眠ってますよ」とだけ言って、また本の山の向こうへ消えていった。' },
+    { id: 'books-page', text: 'どこかで誰かがページをめくる、乾いた小さな音がした。' },
+  ],
   balloon: [
     { id: 'balloon-cameo', cast: true, text: '風船屋の若い店員さんが、細長い風船で作った小さな花を「おまけです」と差し出して、くるりと背を向けて店先に戻っていった。' },
     { id: 'balloon-wind', text: '風が吹いて、店先の風船がいっせいにくるりと向きを変えた。' },
