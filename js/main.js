@@ -85,6 +85,7 @@ function lastArrive() {
 function show(view) {
   for (const v of ['home', 'board']) $(`view-${v}`).hidden = v !== view;
   $('btn-home').hidden = view === 'home';
+  document.body.classList.toggle('at-home', view === 'home'); // ホームでは、上のバーの名前を出さない（大きな見出しと重なるため）
   if (view === 'home') renderHome();
   if (view === 'board') renderBoard();
 }
@@ -105,6 +106,8 @@ function closeChat() {
 
 function renderHome() {
   $('btn-continue').hidden = !game;
+  // 続きがあるときは「続きから」を主役にして、「あたらしく」は控えめに
+  $('btn-new').classList.toggle('primary', !game);
   const list = $('persona-list');
   list.replaceChildren();
   if (!personas.length) list.append(el('li', { class: 'muted', text: 'まだ誰もいないよ。' }));
@@ -360,7 +363,7 @@ function renderBoard(scroll = true) {
   $('status-rolls').textContent = `🎲 ${game.rolls}回`;
   $('btn-roll').hidden = !!pendingChoice;
   $('btn-roll').disabled = busy || game.finished;
-  $('btn-roll').textContent = game.finished ? 'ゴール！おつかれさま' : 'サイコロを振る';
+  $('btn-roll').textContent = game.finished ? '閉園 ── おつかれさま' : 'サイコロを振る';
   if (!busy) {
     $('board-message').textContent = game.finished
       ? '会話を開くと、夢日記を書いてもらったり、思い出を書き出したりできるよ。'
@@ -681,7 +684,7 @@ function updateChatControls() {
   $('btn-prompt').disabled = busy;
   $('btn-next').disabled = busy;
   $('btn-memory').disabled = busy;
-  $('btn-memory').textContent = game?.memory ? '📔 夢日記をもう一度' : '📔 夢日記を書いてもらう';
+  $('btn-memory').textContent = game?.memory ? '夢日記をもう一度' : '夢日記を書いてもらう';
 }
 
 function showError(message) {
@@ -886,6 +889,7 @@ $('btn-home').addEventListener('click', () => { closeChat(); show('home'); });
 game = migrateGame(store.loadGame());
 buildDice();
 $('park-name').textContent = PARK.name;
+$('hero-name').textContent = PARK.name;
 $('park-tagline').textContent = PARK.tagline;
 document.title = PARK.name;
 show('home');
