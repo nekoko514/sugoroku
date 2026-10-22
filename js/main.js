@@ -9,6 +9,7 @@ import {
   buildSystem, buildMessages, arrivalText, compressionRequest, memoryRequest, unsummarizedSize, TOOLS, runTool, seenItems, FOUND_TAG,
 } from './prompt.js';
 import { toMarkdown, toJson, parseSave, fileBaseName, saveFile } from './exporter.js';
+import { icon, facilityIcon } from './icon.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -31,6 +32,11 @@ function el(tag, attrs = {}, ...children) {
   for (const c of children) if (c != null) node.append(c);
   return node;
 }
+
+// 文の頭の絵文字を外す（画面は線画のアイコンと文字だけで見せる。書き出しには絵文字のまま残す）
+const plain = (s) => String(s || '').replace(/^[\p{Extended_Pictographic}\u{FE0F}\u{200D}\s]+/u, '');
+// コマに入れる一文字（ペルソナの名前の最初の字）
+const initial = (name) => Array.from(String(name || '').trim())[0] || '・';
 
 let toastTimer;
 function toast(message, ms = 2600) {
@@ -121,7 +127,9 @@ function renderHome() {
   // 夢の図鑑（これまでに見つけた隠しアイテム）
   const got = new Set(store.loadCollection());
   $('book-count').textContent = `${SECRETS.filter((s) => got.has(s.id)).length} / ${SECRETS.length}`;
-  $('book-list').replaceChildren(...SECRETS.map((s) => el('li', { class: got.has(s.id) ? 'got' : 'unknown', text: got.has(s.id) ? `✨ ${s.name}` : '？？？' })));
+  $('book-list').replaceChildren(...SECRETS.map((s, i) => el('li', { class: got.has(s.id) ? 'got' : 'unknown' },
+    el('span', { class: 'book-no', text: String(i + 1).padStart(2, '0') }),
+    el('span', { class: 'book-name', text: got.has(s.id) ? s.name : '― まだ見つけていない ―' }))));
   const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   $('pwa-hint').hidden = !(isIos && !standalone);
@@ -355,19 +363,19 @@ function renderBoard(scroll = true) {
   renderMap($('map'), {
     position: game.position,
     trail: game.trail,
-    piece: game.persona.emoji || '🙂',
+    piece: initial(game.persona.name),
     choices: pendingChoice ? pendingChoice.choices.map((c) => c.to) : [],
   }, onMapTap);
-  $('status-persona').textContent = `${game.persona.emoji || ''} ${game.persona.name}`;
-  $('status-time').textContent = `🕒 ${timeOfDay(stepOf(game.position), TOTAL_STEPS)}`;
-  $('status-rolls').textContent = `🎲 ${game.rolls}回`;
+  $('status-persona').textContent = `${game.persona.name}と`;
+  $('status-time').textContent = timeOfDay(stepOf(game.position), TOTAL_STEPS);
+  $('status-rolls').textContent = `${stepOf(game.position) + 1} / ${TOTAL_STEPS}マス`;
   $('btn-roll').hidden = !!pendingChoice;
   $('btn-roll').disabled = busy || game.finished;
   $('btn-roll').textContent = game.finished ? '閉園 ── おつかれさま' : 'サイコロを振る';
   if (!busy) {
     $('board-message').textContent = game.finished
       ? '会話を開くと、夢日記を書いてもらったり、思い出を書き出したりできるよ。'
-      : `いまは ${here.emoji} ${here.name}`;
+      : `いまは ${here.name}`;
   }
   const s = game.stats;
   $('usage-total').textContent = s?.calls
@@ -386,7 +394,7 @@ function onMapTap(id) {
     if (c) { pendingChoice.resolve(c); return; }
   }
   const n = NODES[id];
-  toast(`${n.emoji} ${n.name}：${n.hint}`, 3000);
+  toast(`${n.name} ── ${n.hint}`, 3000);
 }
 
 // 分かれ道でどっちへ行くか選んでもらう
@@ -404,7 +412,7 @@ function chooseBranch(choices) {
       const to = NODES[c.to];
       return el('button', { class: 'btn branch-btn', type: 'button', onclick: () => pendingChoice?.resolve(c) },
         el('span', { class: 'branch-name', text: c.label }),
-        el('span', { class: 'branch-to', text: `${to.emoji} ${to.name}へ` }));
+        el('span', { class: 'branch-to', text: `${to.name}へ` }));
     }));
     $('branch-panel').hidden = false;
     $('board-message').textContent = '分かれ道に着いたよ。地図の光っているマスをタップしても選べるよ。';
@@ -462,7 +470,7 @@ async function rollDice() {
   try {
     // 会話が長くなっていたら、進む前に思い出をまとめて、送る量を減らす
     if (unsummarizedSize(game) > settings.compressAt) {
-      $('board-message').textContent = '🧠 ここまでの思い出を整理しているよ…';
+      $('board-message').textContent = 'ここまでの思い出を整理しているよ…';
       try {
         await compress();
       } catch (e) {
@@ -496,14 +504,14 @@ async function rollDice() {
       const pull = linksAt(next.to, game.found || []);
       if (pull.length && left > 1) {
         pulledBy = pull.map((l) => l.id);
-        $('board-message').textContent = `✨ 持ち物の「${pull[0].name}」に引き寄せられて、ここで足が止まった`;
+        $('board-message').textContent = `持ち物の「${pull[0].name}」に引き寄せられて、ここで足が止まった`;
         await wait(1200);
         break;
       }
       // 止まりマス（お題のある施設など）も、通り過ぎずにそこで止まる
       if (NODES[next.to].stop && left > 1) {
         halted = true;
-        $('board-message').textContent = NODES[next.to].stopNote || `${NODES[next.to].name}で足が止まった`;
+        $('board-message').textContent = plain(NODES[next.to].stopNote) || `${NODES[next.to].name}で足が止まった`;
         await wait(1200);
         break;
       }
@@ -511,7 +519,7 @@ async function rollDice() {
     const sq = currentSquare();
     game.rolls += 1;
     game.log.push({ t: 'roll', n: game.rolls, value, from, to: game.position, route, ...(pulledBy ? { pulledBy } : {}), ...(halted ? { halted } : {}) });
-    if (!pulledBy && !halted) $('board-message').textContent = `${value}が出た！ ${sq.emoji} ${sq.name}に止まったよ`;
+    if (!pulledBy && !halted) $('board-message').textContent = `${value}が出た。${sq.name}に止まったよ`;
     arrive(game.position, route);
     await wait(700);
   } finally {
@@ -564,7 +572,7 @@ function trimRaw(raw) {
 function bubble(role, text, usage) {
   const who = role === 'assistant' ? game.persona.name : (game.userName || 'あなた');
   const node = el('div', { class: `msg ${role}` },
-    el('div', { class: 'msg-who', text: role === 'assistant' ? `${game.persona.emoji || ''} ${who}` : who }),
+    el('div', { class: 'msg-who', text: who }),
     el('div', { class: 'msg-text', text }));
   if (usage) node.append(el('div', { class: 'msg-usage', text: fmtUsage(usage) }));
   return node;
@@ -573,30 +581,33 @@ function bubble(role, text, usage) {
 function placeCard(e) {
   const sq = NODES[e.square];
   return el('div', { class: `place-card kind-${sq.kind}` },
-    el('div', { class: 'place-name', text: `${sq.emoji} ${sq.name}` }),
-    el('div', { class: 'muted small-print', text: `${(e.step ?? e.index) + 1}マス目・${e.time}` }),
+    el('div', { class: 'place-head' },
+      el('span', { class: 'place-icon' }, icon(facilityIcon(sq.id))),
+      el('div', {},
+        el('div', { class: 'place-meta', text: `No.${(e.step ?? e.index) + 1}　${e.time}` }),
+        el('div', { class: 'place-name', text: sq.name }))),
     // 景色やイベントはペルソナだけが知っている。ユーザーにはペルソナの言葉で伝わる
-    el('p', { class: 'muted small-print', text: sq.hint }),
-    ...(e.links || []).map((id) => el('p', { class: 'link-note', text: `✨ 持ち物の「${secretById(id)?.name}」が、ここで何かにつながりそう` })));
+    el('p', { class: 'place-hint', text: sq.hint }),
+    ...(e.links || []).map((id) => el('p', { class: 'link-note', text: `持ち物の「${secretById(id)?.name}」が、ここで何かにつながりそう` })));
 }
 
 function promptNote(id) {
   const pr = promptById(id);
-  return el('div', { class: 'roll-note', text: `${pr?.emoji || '✨'} お題：${pr?.title || ''}` });
+  return el('div', { class: 'roll-note', text: `お題　${pr?.title || ''}` });
 }
 
 // お題の答えを、見出しつきのカードにする（見出しは「### 」の行。太字は **…**）
 function promptCard(id, text, usage) {
   const pr = promptById(id);
   const card = el('div', { class: 'prompt-card' },
-    el('div', { class: 'msg-who', text: `${game.persona.emoji || ''} ${game.persona.name}から` }),
-    el('div', { class: 'place-name', text: `${pr?.emoji || '✨'} ${pr?.title || ''}` }));
+    el('div', { class: 'msg-who', text: `${game.persona.name}から` }),
+    el('div', { class: 'place-name', text: pr?.title || '' }));
   for (const block of text.split(/\n{2,}/)) {
     for (const line of block.split('\n')) {
       const t = line.trim();
       if (!t) continue;
       if (t.startsWith('#')) {
-        card.append(el('h4', { text: t.replace(/^#+\s*/, '') }));
+        card.append(el('h4', { text: plain(t.replace(/^#+\s*/, '')) }));
       } else {
         const p = el('p');
         t.replace(/^[-*]\s+/, '・').split('**').forEach((part, i) => {
@@ -613,7 +624,7 @@ function promptCard(id, text, usage) {
 function foundNote(id) {
   const s = secretById(id);
   const n = (game.found || []).indexOf(id) + 1;
-  return el('div', { class: 'found-note', text: `✨ 見つけたもの：${s?.name}（今日 ${n || '?'}つめ）` });
+  return el('div', { class: 'found-note', text: `見つけたもの　${s?.name}（今日 ${n || '?'}つめ）` });
 }
 
 function renderChat() {
@@ -621,9 +632,9 @@ function renderChat() {
   log.replaceChildren();
   for (const e of game.log) {
     if (e.t === 'roll') {
-      log.append(el('div', { class: 'roll-note', text: `🎲 ${e.n}投目：${e.value}が出た${e.route ? `（🪧 ${e.route}へ）` : ''}` }));
-      if (e.pulledBy) log.append(el('div', { class: 'found-note', text: `✨ 持ち物の「${secretById(e.pulledBy[0])?.name}」に引き寄せられて、ここで足が止まった` }));
-      if (e.halted) log.append(el('div', { class: 'found-note', text: NODES[e.to]?.stopNote || '' }));
+      log.append(el('div', { class: 'roll-note', text: `${e.n}投目　${e.value}が出た${e.route ? `・${e.route}へ` : ''}` }));
+      if (e.pulledBy) log.append(el('div', { class: 'found-note', text: `持ち物の「${secretById(e.pulledBy[0])?.name}」に引き寄せられて、ここで足が止まった` }));
+      if (e.halted) log.append(el('div', { class: 'found-note', text: plain(NODES[e.to]?.stopNote) }));
     }
     else if (e.t === 'arrive') log.append(placeCard(e));
     else if (e.t === 'msg' && e.prompt) {
@@ -635,17 +646,17 @@ function renderChat() {
       if (e.ambient) log.append(ambientNote(e.ambient));
       for (const id of e.finds || []) log.append(foundNote(id));
     }
-    else if (e.t === 'compress') log.append(el('div', { class: 'roll-note', text: '🧠 ここまでの思い出を整理したよ' }));
+    else if (e.t === 'compress') log.append(el('div', { class: 'roll-note', text: 'ここまでの思い出を整理したよ' }));
   }
   if (game.memory) {
     log.append(el('div', { class: 'diary' },
-      el('div', { class: 'place-name', text: `📔 ${game.persona.name}の夢日記` }),
+      el('div', { class: 'place-name', text: `${game.persona.name}の夢日記` }),
       el('p', { text: game.memory })));
   }
   const arrive = lastArrive();
   const sq = NODES[arrive?.square] || currentSquare();
-  $('chat-place').textContent = `${sq.emoji} ${sq.name}`;
-  $('chat-sub').textContent = `${game.persona.emoji || ''} ${game.persona.name}と一緒`;
+  $('chat-place').textContent = sq.name;
+  $('chat-sub').textContent = `${game.persona.name}と一緒`;
   $('chat-goal').hidden = !game.finished;
   updatePromptButton(sq);
   $('btn-next').hidden = game.finished;
@@ -658,7 +669,7 @@ function updatePromptButton(sq) {
   const pr = promptAt(sq?.id);
   const done = pr && game.log.some((e) => e.t === 'msg' && e.prompt === pr.id);
   $('btn-prompt').hidden = !pr || done;
-  if (pr) $('btn-prompt').textContent = pr.button;
+  if (pr) $('btn-prompt').textContent = plain(pr.button);
 }
 
 $('btn-prompt').addEventListener('click', () => {
@@ -790,7 +801,7 @@ function nextAmbient() {
 }
 
 function ambientNote(text) {
-  return el('div', { class: 'ambient-note', text: `♪ ${text}` });
+  return el('div', { class: 'ambient-note', text });
 }
 
 // Enterで送信、Shift+Enterで改行（スマホのキーボードでは改行ボタンのまま）
@@ -823,7 +834,7 @@ $('btn-memory').addEventListener('click', async () => {
   updateChatControls();
   $('chat-error').hidden = true;
   const live = el('div', { class: 'diary typing' },
-    el('div', { class: 'place-name', text: `📔 ${game.persona.name}の夢日記` }),
+    el('div', { class: 'place-name', text: `${game.persona.name}の夢日記` }),
     el('p', { text: '' }));
   $('chat-log').querySelector('.diary')?.remove();
   $('chat-log').append(live);
@@ -888,6 +899,10 @@ $('btn-home').addEventListener('click', () => { closeChat(); show('home'); });
 
 game = migrateGame(store.loadGame());
 buildDice();
+// 上のバーのボタンは線画のアイコンに
+$('btn-home').replaceChildren(icon('chevron-left'));
+$('btn-close-chat').replaceChildren(icon('chevron-left'));
+$('btn-settings').replaceChildren(icon('settings'));
 $('park-name').textContent = PARK.name;
 $('hero-name').textContent = PARK.name;
 $('park-tagline').textContent = PARK.tagline;
@@ -895,5 +910,5 @@ document.title = PARK.name;
 show('home');
 
 if (!store.getKey(settings.provider)) {
-  toast('はじめに ⚙︎ から、使うAIとAPIキーを設定してね。', 4000);
+  toast('はじめに右上の設定から、使うAIとAPIキーを設定してね。', 4000);
 }

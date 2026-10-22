@@ -8,8 +8,8 @@
   <meta name="referrer" content="no-referrer">
   <title>ゆめいろパーク</title>
   <meta name="description" content="ペルソナと遊園地をめぐる、AIすごろく">
-  <meta name="theme-color" content="#f3ede2" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0e1120" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2ede4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0d18" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="ゆめいろパーク">
@@ -48,6 +48,7 @@
         <circle class="em-dot" cx="22" cy="30" r="1.2"/><circle class="em-dot" cx="110" cy="24" r="1.4"/><circle class="em-dot" cx="114" cy="92" r="1"/>
       </svg>
       <p class="hero-name" id="hero-name">ゆめいろパーク</p>
+      <p class="hero-latin" aria-hidden="true">Yumeiro Park</p>
       <div class="ornament" aria-hidden="true">✦</div>
       <p class="tagline" id="park-tagline"></p>
     </section>
@@ -59,7 +60,7 @@
 
     <section class="card">
       <div class="card-head">
-        <h2>ペルソナ</h2>
+        <h2><span class="overline" aria-hidden="true">Companions</span>ペルソナ</h2>
         <button class="btn small" id="btn-add-persona" type="button">＋ 追加</button>
       </div>
       <p class="muted">一緒に遊ぶ子を登録してね。シスプロとナレッジは、この端末の中だけに保存されるよ。</p>
@@ -68,7 +69,7 @@
 
     <section class="card">
       <div class="card-head">
-        <h2>夢の図鑑</h2>
+        <h2><span class="overline" aria-hidden="true">Collection</span>夢の図鑑</h2>
         <span class="chip" id="book-count"></span>
       </div>
       <p class="muted">ペルソナが見つけた隠しアイテム。見つけたものは、次に遊ぶときも残るよ。選ぶ道によって、見つかるものが変わるかも。</p>
@@ -76,7 +77,7 @@
     </section>
 
     <section class="card">
-      <h2>セーブデータ</h2>
+      <h2><span class="overline" aria-hidden="true">Archive</span>セーブデータ</h2>
       <p class="muted">書き出したJSONを読み込むと、続きから遊べるよ。</p>
       <label class="btn small file-btn">
         読み込む
